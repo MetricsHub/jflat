@@ -1,11 +1,13 @@
-# oss-maven-template
+# JFlat Utility
 
-![GitHub release (with filter)](https://img.shields.io/github/v/release/sentrysoftware/oss-maven-template)
-![Build](https://img.shields.io/github/actions/workflow/status/sentrysoftware/oss-maven-template/deploy.yml)
-![GitHub top language](https://img.shields.io/github/languages/top/sentrysoftware/oss-maven-template)
-![License](https://img.shields.io/github/license/sentrysoftware/oss-maven-template)
+![GitHub release (with filter)](https://img.shields.io/github/v/release/sentrysoftware/jflat)
+![Build](https://img.shields.io/github/actions/workflow/status/sentrysoftware/jflat/deploy.yml)
+![GitHub top language](https://img.shields.io/github/languages/top/sentrysoftware/jflat)
+![License](https://img.shields.io/github/license/sentrysoftware/jflat)
 
-Repository template for all Sentry open-source Java projects, published on Maven Central.
+The JFlat Utility is responsible of converting a JSON-formated content to a flat structure, exported as a String.
+
+See **[Project Documentation](https://sentrysoftware.github.io/jflat)** and the [Javadoc](https://sentrysoftware.github.io/jflat/apidocs) for more information on how to use this library in your code.
 
 ## Build instructions
 
