@@ -7,7 +7,7 @@
 
 The JFlat Utility is responsible of converting a JSON-formated content to a flat structure, exported as a String.
 
-See **[Project Documentation](https://sentrysoftware.github.io/jflat)** and the [Javadoc](https://sentrysoftware.github.io/jflat/apidocs) for more information on how to use this library in your code.
+See **[Project Documentation](https://sentrysoftware.org/jflat)** and the [Javadoc](https://sentrysoftware.org/jflat/apidocs) for more information on how to use this library in your code.
 
 ## Build instructions
 
