@@ -88,7 +88,7 @@
 
 		<!-- Reproducible Build -->
 		<!-- See https://maven.apache.org/guides/mini/guide-reproducible-builds.html -->
-		<project.build.outputTimestamp>2023-12-14T08:28:57Z</project.build.outputTimestamp>
+		<project.build.outputTimestamp>2024-01-26T13:12:32Z</project.build.outputTimestamp>
 	</properties>
 
 	<dependencyManagement>
