@@ -9,7 +9,6 @@ import java.io.InputStreamReader;
 import java.text.ParseException;
 
 import org.junit.jupiter.api.Test;
-import org.metricshub.jflat.JFlat;
 
 public class JFlatTest {
 
