@@ -1,10 +1,10 @@
-package org.sentrysoftware.jflat;
+package org.metricshub.jflat;
 
 /*-
  * ╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲
  * JFlat Utility
  * ჻჻჻჻჻჻
- * Copyright (C) 2023 Sentry Software
+ * Copyright (C) 2023 Metricshb
  * ჻჻჻჻჻჻
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

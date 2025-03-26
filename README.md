@@ -1,13 +1,13 @@
 # JFlat Utility
 
-![GitHub release (with filter)](https://img.shields.io/github/v/release/sentrysoftware/jflat)
-![Build](https://img.shields.io/github/actions/workflow/status/sentrysoftware/jflat/deploy.yml)
-![GitHub top language](https://img.shields.io/github/languages/top/sentrysoftware/jflat)
-![License](https://img.shields.io/github/license/sentrysoftware/jflat)
+![GitHub release (with filter)](https://img.shields.io/github/v/release/metricshub/jflat)
+![Build](https://img.shields.io/github/actions/workflow/status/metricshub/jflat/deploy.yml)
+![GitHub top language](https://img.shields.io/github/languages/top/metricshub/jflat)
+![License](https://img.shields.io/github/license/metricshub/jflat)
 
 The JFlat Utility is responsible of converting a JSON-formated content to a flat structure, exported as a String.
 
-See **[Project Documentation](https://sentrysoftware.org/jflat)** and the [Javadoc](https://sentrysoftware.org/jflat/apidocs) for more information on how to use this library in your code.
+See **[Project Documentation](https://metricshub.org/jflat)** and the [Javadoc](https://metricshub.org/jflat/apidocs) for more information on how to use this library in your code.
 
 ## Build instructions
 

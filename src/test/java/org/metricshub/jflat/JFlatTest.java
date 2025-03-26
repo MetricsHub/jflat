@@ -1,4 +1,4 @@
-package org.sentrysoftware.jflat;
+package org.metricshub.jflat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,6 +9,7 @@ import java.io.InputStreamReader;
 import java.text.ParseException;
 
 import org.junit.jupiter.api.Test;
+import org.metricshub.jflat.JFlat;
 
 public class JFlatTest {
 

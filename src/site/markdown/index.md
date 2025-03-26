@@ -10,7 +10,7 @@ Add JFlat in the list of dependencies in your [Maven **pom.xml**](https://maven.
 <dependencies>
 	<!-- [...] -->
 	<dependency>
-		<groupId>org.sentrysoftware</groupId>
+		<groupId>org.metricshub</groupId>
 		<artifactId>jflat</artifactId>
 		<version>${project.version}</version>
 	</dependency>
@@ -24,7 +24,7 @@ import java.text.ParseException;
 import java.util.Arrays;
 import java.util.List;
 
-import org.sentrysoftware.jflat.JFlat;
+import org.metricshub.jflat.JFlat;
 
 public class Main {
 
