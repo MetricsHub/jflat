@@ -27,16 +27,15 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.TreeMap;
-
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonException;
+import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
-import javax.json.JsonValue;
-import javax.json.JsonStructure;
 import javax.json.JsonString;
-import javax.json.JsonNumber;
+import javax.json.JsonStructure;
+import javax.json.JsonValue;
 import javax.json.stream.JsonLocation;
 import javax.json.stream.JsonParsingException;
 
@@ -47,7 +46,7 @@ import javax.json.stream.JsonParsingException;
  */
 public class JFlat {
 
-	private TreeMap<String, String> map = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);  // IMPORTANT: The map is case iNsEnSiTiVe!
+	private TreeMap<String, String> map = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER); // IMPORTANT: The map is case iNsEnSiTiVe!
 	private ArrayList<String> arrayPaths = new ArrayList<String>();
 	private ArrayList<Integer> arrayLengths = new ArrayList<Integer>();
 	private Reader inputReader;
@@ -94,22 +93,24 @@ public class JFlat {
 	 * @throws IllegalStateException when... actually never in a single-thread context
 	 */
 	public void parse(boolean removeNodes) throws ParseException, IOException, IllegalStateException {
-
 		// Read the JSON source
 		JsonReader reader = Json.createReader(inputReader);
 		JsonStructure root;
 
 		try {
 			root = reader.read();
-		}
-		catch (JsonParsingException e) {
+		} catch (JsonParsingException e) {
 			JsonLocation location = e.getLocation();
-			throw new ParseException("JSON syntax error in the specified source at line " + location.getLineNumber() + ", column " + location.getColumnNumber(), (int) location.getStreamOffset());
-		}
-		catch (JsonException e) {
+			throw new ParseException(
+				"JSON syntax error in the specified source at line " +
+				location.getLineNumber() +
+				", column " +
+				location.getColumnNumber(),
+				(int) location.getStreamOffset()
+			);
+		} catch (JsonException e) {
 			throw new IOException(e.getCause());
-		}
-		finally {
+		} finally {
 			// In any case, close the reader
 			if (reader != null) {
 				reader.close();
@@ -130,7 +131,6 @@ public class JFlat {
 		parsed = true;
 	}
 
-
 	/**
 	 * Navigate the JSON tree and populate the hash map that will contain pairs of keys/value in the form below:
 	 * obj1.propA = value
@@ -146,7 +146,6 @@ public class JFlat {
 	 * @param removeNodes Whether to remove "artificial" nodes without values ({object} and {array})
 	 */
 	private void navigateTree(JsonValue tree, String path, boolean removeNodes) {
-
 		// Sanity check
 		if (tree == null) {
 			return;
@@ -157,71 +156,72 @@ public class JFlat {
 
 		// Depending on the type of the value where we are...
 		switch (tree.getValueType()) {
+			case OBJECT:
+				{
+					// We have an object, we will parse all of its attributes
+					JsonObject object = (JsonObject) tree;
 
-			case OBJECT: {
-				// We have an object, we will parse all of its attributes
-				JsonObject object = (JsonObject) tree;
+					// Add it to the map as an object (if it wasn't asked to remove it)
+					if (!removeNodes) {
+						map.put(path, "{object}");
+					}
 
-				// Add it to the map as an object (if it wasn't asked to remove it)
-				if (!removeNodes) {
-					map.put(path, "{object}");
+					// Go through each property of the object
+					for (String name : object.keySet()) {
+						// The syntax of the path is object.propertyA
+						navigateTree(object.get(name), path + "/" + name, removeNodes);
+					}
+					break;
 				}
+			case ARRAY:
+				{
+					// We have an array, that's the interesting case
+					JsonArray array = (JsonArray) tree;
 
-				// Go through each property of the object
-				for (String name : object.keySet()) {
-					// The syntax of the path is object.propertyA
-					navigateTree(object.get(name), path + "/" + name, removeNodes);
+					// Add it to the map as an array (if it wasn't asked to remove it)
+					if (!removeNodes) {
+						map.put(path, "{array}");
+					}
+
+					// Go through each entry in the array
+					int i = 0;
+					for (JsonValue val : array) {
+						// Go through
+						navigateTree(val, path + "[" + i + "]", removeNodes);
+						i++;
+					}
+
+					// Remember its path and length so we properly (and efficiently) parse it later
+					arrayPaths.add(path);
+					arrayLengths.add(i);
+
+					break;
 				}
-				break;
-			}
+			case STRING:
+				{
+					// We got a string
+					JsonString st = (JsonString) tree;
 
-			case ARRAY: {
-				// We have an array, that's the interesting case
-				JsonArray array = (JsonArray) tree;
+					// If so, add it to the map
+					map.put(path, st.getString());
 
-				// Add it to the map as an array (if it wasn't asked to remove it)
-				if (!removeNodes) {
-					map.put(path, "{array}");
+					break;
 				}
-
-				// Go through each entry in the array
-				int i = 0;
-				for (JsonValue val : array) {
-					// Go through
-					navigateTree(val, path + "[" + i + "]", removeNodes);
-					i++;
+			case NUMBER:
+				{
+					JsonNumber num = (JsonNumber) tree;
+					map.put(path, num.toString());
+					break;
 				}
-
-				// Remember its path and length so we properly (and efficiently) parse it later
-				arrayPaths.add(path);
-				arrayLengths.add(i);
-
-				break;
-			}
-
-			case STRING: {
-				// We got a string
-				JsonString st = (JsonString) tree;
-
-				// If so, add it to the map
-				map.put(path, st.getString());
-
-				break;
-			}
-
-			case NUMBER: {
-				JsonNumber num = (JsonNumber) tree;
-				map.put(path, num.toString());
-				break;
-			}
-
 			case TRUE:
 			case FALSE:
-			case NULL: {
-				map.put(path, tree.getValueType().toString());
+			case NULL:
+				{
+					map.put(path, tree.getValueType().toString());
+					break;
+				}
+			default:
 				break;
-			}
-			default: break;
 		}
 	}
 
@@ -238,7 +238,6 @@ public class JFlat {
 	 * @throws IllegalStateException when the document has not been parsed first (call parse() first!)
 	 */
 	public StringBuilder getFlatTree(String valueSeparator, String replaceEndOfLines) throws IllegalStateException {
-
 		// Did we parse the thing yet?
 		if (!parsed) {
 			throw new IllegalStateException("JSON document has not been parsed");
@@ -253,8 +252,7 @@ public class JFlat {
 			// If we need to replace end of lines
 			if (replaceEndOfLines != null) {
 				result.append(entry.getValue().replace("\n", replaceEndOfLines)).append("\n");
-			}
-			else {
+			} else {
 				result.append(entry.getValue()).append("\n");
 			}
 		}
@@ -298,8 +296,8 @@ public class JFlat {
 	 * @throws IllegalArgumentException when any of the specified arguments is null (or an entry in the csvProperties array is null)
 	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
 	 */
-	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator) throws IllegalStateException, IllegalArgumentException {
-
+	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator)
+		throws IllegalStateException, IllegalArgumentException {
 		// Did we parse the thing yet?
 		if (!parsed) {
 			throw new IllegalStateException("JSON document has not been parsed");
@@ -389,7 +387,6 @@ public class JFlat {
 
 		// Now, process each element, as described above
 		for (String pathElement : pathElementArray) {
-
 			// Empty pathElement? Skip.
 			if (pathElement == null || pathElement.isEmpty()) {
 				continue;
@@ -403,8 +400,7 @@ public class JFlat {
 				String path;
 				if (existingEntry.equals("/")) {
 					path = "/" + pathElement;
-				}
-				else {
+				} else {
 					path = existingEntry + "/" + pathElement;
 				}
 
@@ -423,8 +419,7 @@ public class JFlat {
 					for (int i = 0; i < arrayLength; i++) {
 						newEntries.add(path + "[" + i + "]");
 					}
-				}
-				else {
+				} else {
 					// This is not an array, simply add path to the newEntries list
 					newEntries.add(path);
 				}
@@ -434,10 +429,8 @@ public class JFlat {
 			entries = newEntries;
 		}
 
-
 		// And now, build the CSV
 		for (String entry : entries) {
-
 			// Check that the entry actually exists (in case, the user has put an invalid entryKey)
 			if (!map.containsKey(entry)) {
 				continue;
@@ -453,15 +446,13 @@ public class JFlat {
 
 			// Then add the value of each column (empty string for null)
 			for (String property : csvProperties) {
-
 				// Path of the property to get
 				// If property is just ".", then it's the entryKey itself that we want,
 				// like when the entry key is just a simple array of integers or strings
 				String path;
 				if (property.equals(".")) {
 					path = entry;
-				}
-				else {
+				} else {
 					path = entry + "/" + property;
 				}
 
@@ -488,7 +479,5 @@ public class JFlat {
 
 		// Return
 		return csvResult;
-
 	}
-
 }

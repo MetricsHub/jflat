@@ -142,7 +142,7 @@
 		<module name="MethodParamPad"/>
 		<module name="NoWhitespaceAfter"/>
 		<module name="NoWhitespaceBefore"/>
-		<module name="OperatorWrap"/>
+		<!--<module name="OperatorWrap"/> -->
 		<!--<module name="ParenPad"/>-->
 		<module name="TypecastParenPad"/>
 		<module name="WhitespaceAfter">
@@ -164,7 +164,8 @@
 		<!-- <module name="AvoidNestedBlocks"/> -->
 		<!--<module name="EmptyBlock"/>-->
 		<module name="LeftCurly">
-			<property name="option" value="nlow"/>
+			<property name="option" value="eol"/>
+			 <property name="tokens" value="METHOD_DEF, CTOR_DEF, STATIC_INIT, CLASS_DEF, INTERFACE_DEF, ENUM_DEF, ANNOTATION_DEF"/>
 		</module>
 		<module name="NeedBraces"/>
 		<!--<module name="RightCurly">

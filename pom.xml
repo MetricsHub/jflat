@@ -7,7 +7,6 @@
 		<version>2</version>
 	</parent>
 
-	<groupId>org.metricshub</groupId>
 	<artifactId>jflat</artifactId>
 	<version>1.1.00-SNAPSHOT</version>
 
@@ -142,8 +141,26 @@
 					</rulesets>
 				</configuration>
 			</plugin>
-
 		</plugins>
 	</reporting>
+	<build>
+		<plugins>
+			<!-- Prettier -->
+			<plugin>
+				<groupId>com.hubspot.maven.plugins</groupId>
+				<artifactId>prettier-maven-plugin</artifactId>
+				<version>0.21</version>
+				<configuration>
+					<prettierJavaVersion>2.5.0</prettierJavaVersion>
+					<ignoreConfigFile>false</ignoreConfigFile>
+					<ignoreEditorConfig>false</ignoreEditorConfig>
+					<inputGlobs>
+						<inputGlob>src/main/java/**/*.java</inputGlob>
+						<inputGlob>src/test/java/**/*.java</inputGlob>
+					</inputGlobs>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
 
 </project>
