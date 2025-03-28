@@ -2,12 +2,11 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<parent>
-		<groupId>org.sentrysoftware</groupId>
+		<groupId>org.metricshub</groupId>
 		<artifactId>oss-parent</artifactId>
 		<version>2</version>
 	</parent>
 
-	<groupId>org.sentrysoftware</groupId>
 	<artifactId>jflat</artifactId>
 	<version>1.1.00-SNAPSHOT</version>
 
@@ -15,11 +14,11 @@
 	<description>JFlat Utility for Java</description>
 
 	<organization>
-		<name>Sentry Software</name>
-		<url>https://sentrysoftware.com</url>
+		<name>MetricsHub</name>
+		<url>https://metricshub.com</url>
 	</organization>
 
-	<url>https://sentrysoftware.org/jflat</url>
+	<url>https://metricshub.org/jflat</url>
 	<inceptionYear>2023</inceptionYear>
 
 	<licenses>
@@ -32,12 +31,12 @@
 
 	<issueManagement>
 		<system>GitHub</system>
-		<url>https://github.com/sentrysoftware/jflat/issues/</url>
+		<url>https://github.com/metricshub/jflat/issues/</url>
 	</issueManagement>
 
 	<scm>
-		<connection>scm:git:https://github.com/sentrysoftware/jflat.git</connection>
-		<url>https://github.com/sentrysoftware/jflat</url>
+		<connection>scm:git:https://github.com/metricshub/jflat.git</connection>
+		<url>https://github.com/metricshub/jflat</url>
 		<tag>HEAD</tag>
 	</scm>
 
@@ -57,8 +56,8 @@
 			</roles>
 		</developer>
 		<developer>
-			<name>Kawtar Bakour (@KawtarBK9)</name>
-			<email>kawtar@sentrysoftware.com</email>
+			<name>Safae AJIB (@SafaeAJ)</name>
+			<email>safae@sentrysoftware.com</email>
 			<roles>
 				<role>maintainer</role>
 			</roles>
@@ -142,8 +141,34 @@
 					</rulesets>
 				</configuration>
 			</plugin>
-
 		</plugins>
 	</reporting>
+	<build>
+		<plugins>
+			<!-- Prettier -->
+			<plugin>
+				<groupId>com.hubspot.maven.plugins</groupId>
+				<artifactId>prettier-maven-plugin</artifactId>
+				<version>0.21</version>
+				<configuration>
+					<prettierJavaVersion>2.5.0</prettierJavaVersion>
+					<ignoreConfigFile>false</ignoreConfigFile>
+					<ignoreEditorConfig>false</ignoreEditorConfig>
+					<inputGlobs>
+						<inputGlob>src/main/java/**/*.java</inputGlob>
+						<inputGlob>src/test/java/**/*.java</inputGlob>
+					</inputGlobs>
+				</configuration>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
 
 </project>

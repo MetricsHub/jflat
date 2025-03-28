@@ -1,10 +1,10 @@
-package org.sentrysoftware.jflat;
+package org.metricshub.jflat;
 
 /*-
  * ╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲
  * JFlat Utility
  * ჻჻჻჻჻჻
- * Copyright (C) 2023 Sentry Software
+ * Copyright (C) 2023 Metricshb
  * ჻჻჻჻჻჻
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,16 +27,15 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.TreeMap;
-
 import javax.json.Json;
 import javax.json.JsonArray;
 import javax.json.JsonException;
+import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
-import javax.json.JsonValue;
-import javax.json.JsonStructure;
 import javax.json.JsonString;
-import javax.json.JsonNumber;
+import javax.json.JsonStructure;
+import javax.json.JsonValue;
 import javax.json.stream.JsonLocation;
 import javax.json.stream.JsonParsingException;
 
@@ -47,7 +46,7 @@ import javax.json.stream.JsonParsingException;
  */
 public class JFlat {
 
-	private TreeMap<String, String> map = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);  // IMPORTANT: The map is case iNsEnSiTiVe!
+	private TreeMap<String, String> map = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER); // IMPORTANT: The map is case iNsEnSiTiVe!
 	private ArrayList<String> arrayPaths = new ArrayList<String>();
 	private ArrayList<Integer> arrayLengths = new ArrayList<Integer>();
 	private Reader inputReader;
@@ -94,24 +93,28 @@ public class JFlat {
 	 * @throws IllegalStateException when... actually never in a single-thread context
 	 */
 	public void parse(boolean removeNodes) throws ParseException, IOException, IllegalStateException {
-
 		// Read the JSON source
 		JsonReader reader = Json.createReader(inputReader);
 		JsonStructure root;
 
 		try {
 			root = reader.read();
-		}
-		catch (JsonParsingException e) {
+		} catch (JsonParsingException e) {
 			JsonLocation location = e.getLocation();
-			throw new ParseException("JSON syntax error in the specified source at line " + location.getLineNumber() + ", column " + location.getColumnNumber(), (int) location.getStreamOffset());
-		}
-		catch (JsonException e) {
+			throw new ParseException(
+				"JSON syntax error in the specified source at line " +
+				location.getLineNumber() +
+				", column " +
+				location.getColumnNumber(),
+				(int) location.getStreamOffset()
+			);
+		} catch (JsonException e) {
 			throw new IOException(e.getCause());
-		}
-		finally {
+		} finally {
 			// In any case, close the reader
-			if (reader != null) reader.close();
+			if (reader != null) {
+				reader.close();
+			}
 		}
 
 		// Parse it and build the hash map
@@ -128,7 +131,6 @@ public class JFlat {
 		parsed = true;
 	}
 
-
 	/**
 	 * Navigate the JSON tree and populate the hash map that will contain pairs of keys/value in the form below:
 	 * obj1.propA = value
@@ -144,18 +146,17 @@ public class JFlat {
 	 * @param removeNodes Whether to remove "artificial" nodes without values ({object} and {array})
 	 */
 	private void navigateTree(JsonValue tree, String path, boolean removeNodes) {
-
 		// Sanity check
 		if (tree == null) {
 			return;
 		}
-		if (path == null)
+		if (path == null) {
 			path = "";
+		}
 
 		// Depending on the type of the value where we are...
 		switch (tree.getValueType()) {
-
-			case OBJECT: {
+			case OBJECT:
 				// We have an object, we will parse all of its attributes
 				JsonObject object = (JsonObject) tree;
 
@@ -170,9 +171,7 @@ public class JFlat {
 					navigateTree(object.get(name), path + "/" + name, removeNodes);
 				}
 				break;
-			}
-
-			case ARRAY: {
+			case ARRAY:
 				// We have an array, that's the interesting case
 				JsonArray array = (JsonArray) tree;
 
@@ -194,9 +193,7 @@ public class JFlat {
 				arrayLengths.add(i);
 
 				break;
-			}
-
-			case STRING: {
+			case STRING:
 				// We got a string
 				JsonString st = (JsonString) tree;
 
@@ -204,21 +201,17 @@ public class JFlat {
 				map.put(path, st.getString());
 
 				break;
-			}
-
-			case NUMBER: {
+			case NUMBER:
 				JsonNumber num = (JsonNumber) tree;
 				map.put(path, num.toString());
 				break;
-			}
-
 			case TRUE:
 			case FALSE:
-			case NULL: {
+			case NULL:
 				map.put(path, tree.getValueType().toString());
 				break;
-			}
-			default: break;
+			default:
+				break;
 		}
 	}
 
@@ -235,7 +228,6 @@ public class JFlat {
 	 * @throws IllegalStateException when the document has not been parsed first (call parse() first!)
 	 */
 	public StringBuilder getFlatTree(String valueSeparator, String replaceEndOfLines) throws IllegalStateException {
-
 		// Did we parse the thing yet?
 		if (!parsed) {
 			throw new IllegalStateException("JSON document has not been parsed");
@@ -250,8 +242,7 @@ public class JFlat {
 			// If we need to replace end of lines
 			if (replaceEndOfLines != null) {
 				result.append(entry.getValue().replace("\n", replaceEndOfLines)).append("\n");
-			}
-			else {
+			} else {
 				result.append(entry.getValue()).append("\n");
 			}
 		}
@@ -295,8 +286,8 @@ public class JFlat {
 	 * @throws IllegalArgumentException when any of the specified arguments is null (or an entry in the csvProperties array is null)
 	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
 	 */
-	public StringBuilder toCSV(String csvEntryKey, String [] csvProperties, String separator) throws IllegalStateException, IllegalArgumentException {
-
+	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator)
+		throws IllegalStateException, IllegalArgumentException {
 		// Did we parse the thing yet?
 		if (!parsed) {
 			throw new IllegalStateException("JSON document has not been parsed");
@@ -318,20 +309,27 @@ public class JFlat {
 		}
 
 		// Clean the properties
-		for (int i = 0 ; i < csvProperties.length ; i++) {
-			if (csvProperties[i].startsWith("./")) { csvProperties[i] = csvProperties[i].substring(2); }
-			while (csvProperties[i].startsWith("/")) { csvProperties[i] = csvProperties[i].substring(1); }
+		for (int i = 0; i < csvProperties.length; i++) {
+			if (csvProperties[i].startsWith("./")) {
+				csvProperties[i] = csvProperties[i].substring(2);
+			}
+			while (csvProperties[i].startsWith("/")) {
+				csvProperties[i] = csvProperties[i].substring(1);
+			}
 		}
 
 		// Default separator is ";"
-		if (separator == null) { separator = ";"; }
+		if (separator == null) {
+			separator = ";";
+		}
 
 		// Initialize the StringBuilder to hold the result
 		StringBuilder csvResult = new StringBuilder();
 
 		// Empty TreeMap?
-		if (map == null) return csvResult;
-		if (map.size() == 0) return csvResult;
+		if (map == null || map.size() == 0) {
+			return csvResult;
+		}
 
 		// Add a "/" at the beginning of the entry key, if necessary
 		if (csvEntryKey.isEmpty()) {
@@ -361,7 +359,7 @@ public class JFlat {
 		// In case the JSON doc is an array, we will add its root entries
 		// Note: this means that "" (empty string) is in the list of arrays found in the doc
 		int arrayLength = 0;
-		for (int i = 0 ; i < arrayPaths.size() ; i++) {
+		for (int i = 0; i < arrayPaths.size(); i++) {
 			if ("".equals(arrayPaths.get(i))) {
 				arrayLength = arrayLengths.get(i);
 				break;
@@ -369,7 +367,7 @@ public class JFlat {
 		}
 		if (arrayLength > 0) {
 			// Start with [0], [1], etc.
-			for (int i = 0 ; i < arrayLength ; i++) {
+			for (int i = 0; i < arrayLength; i++) {
 				entries.add("[" + i + "]");
 			}
 		} else {
@@ -379,10 +377,10 @@ public class JFlat {
 
 		// Now, process each element, as described above
 		for (String pathElement : pathElementArray) {
-
 			// Empty pathElement? Skip.
-			if (pathElement == null) continue;
-			if (pathElement.isEmpty()) continue;
+			if (pathElement == null || pathElement.isEmpty()) {
+				continue;
+			}
 
 			// Temporary list where we will store the new entries
 			ArrayList<String> newEntries = new ArrayList<String>();
@@ -392,14 +390,13 @@ public class JFlat {
 				String path;
 				if (existingEntry.equals("/")) {
 					path = "/" + pathElement;
-				}
-				else {
+				} else {
 					path = existingEntry + "/" + pathElement;
 				}
 
 				// Check whether path is listed in arrayPaths
 				arrayLength = 0;
-				for (int i = 0 ; i < arrayPaths.size() ; i++) {
+				for (int i = 0; i < arrayPaths.size(); i++) {
 					if (path.equalsIgnoreCase(arrayPaths.get(i))) {
 						arrayLength = arrayLengths.get(i);
 						break;
@@ -409,11 +406,10 @@ public class JFlat {
 				if (arrayLength > 0) {
 					// So, path is an array
 					// Then add each entry of the array to the newEntries list
-					for (int i = 0 ; i < arrayLength ; i++) {
+					for (int i = 0; i < arrayLength; i++) {
 						newEntries.add(path + "[" + i + "]");
 					}
-				}
-				else {
+				} else {
 					// This is not an array, simply add path to the newEntries list
 					newEntries.add(path);
 				}
@@ -423,30 +419,30 @@ public class JFlat {
 			entries = newEntries;
 		}
 
-
 		// And now, build the CSV
 		for (String entry : entries) {
-
 			// Check that the entry actually exists (in case, the user has put an invalid entryKey)
-			if (!map.containsKey(entry)) continue;
+			if (!map.containsKey(entry)) {
+				continue;
+			}
 
 			// First, add the "ID" of the entry
 			csvResult.append(map.floorKey(entry)).append(separator);
 
 			// If it's the root ("/"), replace it with "", so that future concatenation with the property name will work properly
-			if (entry.equals("/")) { entry = ""; }
+			if (entry.equals("/")) {
+				entry = "";
+			}
 
 			// Then add the value of each column (empty string for null)
 			for (String property : csvProperties) {
-
 				// Path of the property to get
 				// If property is just ".", then it's the entryKey itself that we want,
 				// like when the entry key is just a simple array of integers or strings
 				String path;
 				if (property.equals(".")) {
 					path = entry;
-				}
-				else {
+				} else {
 					path = entry + "/" + property;
 				}
 
@@ -459,7 +455,9 @@ public class JFlat {
 
 				// Get the value
 				String value = map.get(path);
-				if (value == null) value = "";
+				if (value == null) {
+					value = "";
+				}
 
 				// Append to the result
 				csvResult.append(value).append(separator);
@@ -471,7 +469,5 @@ public class JFlat {
 
 		// Return
 		return csvResult;
-
 	}
-
 }
