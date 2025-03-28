@@ -159,6 +159,14 @@
 						<inputGlob>src/test/java/**/*.java</inputGlob>
 					</inputGlobs>
 				</configuration>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
