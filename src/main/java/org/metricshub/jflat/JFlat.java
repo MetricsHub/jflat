@@ -157,69 +157,59 @@ public class JFlat {
 		// Depending on the type of the value where we are...
 		switch (tree.getValueType()) {
 			case OBJECT:
-				{
-					// We have an object, we will parse all of its attributes
-					JsonObject object = (JsonObject) tree;
+				// We have an object, we will parse all of its attributes
+				JsonObject object = (JsonObject) tree;
 
-					// Add it to the map as an object (if it wasn't asked to remove it)
-					if (!removeNodes) {
-						map.put(path, "{object}");
-					}
-
-					// Go through each property of the object
-					for (String name : object.keySet()) {
-						// The syntax of the path is object.propertyA
-						navigateTree(object.get(name), path + "/" + name, removeNodes);
-					}
-					break;
+				// Add it to the map as an object (if it wasn't asked to remove it)
+				if (!removeNodes) {
+					map.put(path, "{object}");
 				}
+
+				// Go through each property of the object
+				for (String name : object.keySet()) {
+					// The syntax of the path is object.propertyA
+					navigateTree(object.get(name), path + "/" + name, removeNodes);
+				}
+				break;
 			case ARRAY:
-				{
-					// We have an array, that's the interesting case
-					JsonArray array = (JsonArray) tree;
+				// We have an array, that's the interesting case
+				JsonArray array = (JsonArray) tree;
 
-					// Add it to the map as an array (if it wasn't asked to remove it)
-					if (!removeNodes) {
-						map.put(path, "{array}");
-					}
-
-					// Go through each entry in the array
-					int i = 0;
-					for (JsonValue val : array) {
-						// Go through
-						navigateTree(val, path + "[" + i + "]", removeNodes);
-						i++;
-					}
-
-					// Remember its path and length so we properly (and efficiently) parse it later
-					arrayPaths.add(path);
-					arrayLengths.add(i);
-
-					break;
+				// Add it to the map as an array (if it wasn't asked to remove it)
+				if (!removeNodes) {
+					map.put(path, "{array}");
 				}
+
+				// Go through each entry in the array
+				int i = 0;
+				for (JsonValue val : array) {
+					// Go through
+					navigateTree(val, path + "[" + i + "]", removeNodes);
+					i++;
+				}
+
+				// Remember its path and length so we properly (and efficiently) parse it later
+				arrayPaths.add(path);
+				arrayLengths.add(i);
+
+				break;
 			case STRING:
-				{
-					// We got a string
-					JsonString st = (JsonString) tree;
+				// We got a string
+				JsonString st = (JsonString) tree;
 
-					// If so, add it to the map
-					map.put(path, st.getString());
+				// If so, add it to the map
+				map.put(path, st.getString());
 
-					break;
-				}
+				break;
 			case NUMBER:
-				{
-					JsonNumber num = (JsonNumber) tree;
-					map.put(path, num.toString());
-					break;
-				}
+				JsonNumber num = (JsonNumber) tree;
+				map.put(path, num.toString());
+				break;
 			case TRUE:
 			case FALSE:
 			case NULL:
-				{
-					map.put(path, tree.getValueType().toString());
-					break;
-				}
+				map.put(path, tree.getValueType().toString());
+				break;
 			default:
 				break;
 		}
