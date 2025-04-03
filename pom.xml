@@ -8,7 +8,7 @@
 	</parent>
 
 	<artifactId>jflat</artifactId>
-	<version>1.0.02</version>
+	<version>1.1.00-SNAPSHOT</version>
 
 	<name>JFlat Utility</name>
 	<description>JFlat Utility for Java</description>
@@ -37,7 +37,7 @@
 	<scm>
 		<connection>scm:git:https://github.com/metricshub/jflat.git</connection>
 		<url>https://github.com/metricshub/jflat</url>
-		<tag>v1.0.02</tag>
+		<tag>HEAD</tag>
 	</scm>
 
 	<developers>
@@ -77,7 +77,7 @@
 
 		<!-- Reproducible Build -->
 		<!-- See https://maven.apache.org/guides/mini/guide-reproducible-builds.html -->
-		<project.build.outputTimestamp>2025-04-03T12:41:05Z</project.build.outputTimestamp>
+		<project.build.outputTimestamp>2025-04-03T12:41:50Z</project.build.outputTimestamp>
 	</properties>
 
 	<dependencyManagement>
