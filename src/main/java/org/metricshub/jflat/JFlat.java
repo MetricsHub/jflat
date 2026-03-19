@@ -4,7 +4,7 @@ package org.metricshub.jflat;
  * ╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲
  * JFlat Utility
  * ჻჻჻჻჻჻
- * Copyright (C) 2023 Metricshb
+ * Copyright (C) 2023 MetricsHub
  * ჻჻჻჻჻჻
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -382,36 +382,104 @@ public class JFlat {
 				continue;
 			}
 
+			// Wildcard handling:
+			// "*" in the path means "expand all direct children of the current object".
+			// This is useful for JSON structures where objects are keyed by dynamic names
+			// (e.g. UIDs, hashes) rather than stored in arrays.
+			// Example: /members/* expands to /members/key1, /members/key2, etc.
+			//
+			// Escaping: if a JSON property is literally named "*", use "\*" in the path
+			// to refer to it without triggering wildcard expansion.
+			boolean isWildcard = "*".equals(pathElement);
+			if (pathElement.startsWith("\\")) {
+				// Strip the escape backslash and treat the rest as a literal property name
+				pathElement = pathElement.substring(1);
+				isWildcard = false;
+			}
+
 			// Temporary list where we will store the new entries
 			ArrayList<String> newEntries = new ArrayList<String>();
 
-			// For each existing entry, check whether entry/pathElement is an array
 			for (String existingEntry : entries) {
-				String path;
-				if (existingEntry.equals("/")) {
-					path = "/" + pathElement;
-				} else {
-					path = existingEntry + "/" + pathElement;
-				}
+				if (isWildcard) {
+					// Wildcard expansion: scan the flat map for all direct children of existingEntry.
+					// We iterate over every key in the map and find those that start with the
+					// current entry's prefix (e.g. "/members/"). From each matching key, we
+					// extract the immediate child name by looking for the next "/" or "["
+					// delimiter, which marks a deeper level or an array index.
+					// Duplicates are skipped (case-insensitive) to ensure each child appears once.
+					String prefix = existingEntry.equals("/") ? "/" : existingEntry + "/";
+					for (String key : map.keySet()) {
+						// Only consider keys that are strictly under the prefix
+						if (key.length() > prefix.length() && key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+							// Extract the portion after the prefix, e.g. "abc123/name" from "/members/abc123/name"
+							String remainder = key.substring(prefix.length());
 
-				// Check whether path is listed in arrayPaths
-				arrayLength = 0;
-				for (int i = 0; i < arrayPaths.size(); i++) {
-					if (path.equalsIgnoreCase(arrayPaths.get(i))) {
-						arrayLength = arrayLengths.get(i);
-						break;
-					}
-				}
+							// Find the boundary of the immediate child name:
+							// - "/" indicates a deeper nested property
+							// - "[" indicates an array index
+							// The child name is everything before the first such delimiter.
+							int slashPos = remainder.indexOf('/');
+							int bracketPos = remainder.indexOf('[');
+							String childName;
+							if (slashPos == -1 && bracketPos == -1) {
+								// No delimiter: the remainder itself is the child name (leaf key)
+								childName = remainder;
+							} else if (slashPos == -1) {
+								// Only "[" found: child has array children (e.g. "args[0]")
+								childName = remainder.substring(0, bracketPos);
+							} else if (bracketPos == -1) {
+								// Only "/" found: child has nested properties (e.g. "abc123/name")
+								childName = remainder.substring(0, slashPos);
+							} else {
+								// Both found: take the earlier delimiter
+								childName = remainder.substring(0, Math.min(slashPos, bracketPos));
+							}
 
-				if (arrayLength > 0) {
-					// So, path is an array
-					// Then add each entry of the array to the newEntries list
-					for (int i = 0; i < arrayLength; i++) {
-						newEntries.add(path + "[" + i + "]");
+							// Add the child path if it's valid and not already in the list
+							if (!childName.isEmpty()) {
+								String childPath = prefix + childName;
+								// Deduplicate (case-insensitive, consistent with the TreeMap)
+								boolean alreadyAdded = false;
+								for (String added : newEntries) {
+									if (added.equalsIgnoreCase(childPath)) {
+										alreadyAdded = true;
+										break;
+									}
+								}
+								if (!alreadyAdded) {
+									newEntries.add(childPath);
+								}
+							}
+						}
 					}
 				} else {
-					// This is not an array, simply add path to the newEntries list
-					newEntries.add(path);
+					String path;
+					if (existingEntry.equals("/")) {
+						path = "/" + pathElement;
+					} else {
+						path = existingEntry + "/" + pathElement;
+					}
+
+					// Check whether path is listed in arrayPaths
+					arrayLength = 0;
+					for (int i = 0; i < arrayPaths.size(); i++) {
+						if (path.equalsIgnoreCase(arrayPaths.get(i))) {
+							arrayLength = arrayLengths.get(i);
+							break;
+						}
+					}
+
+					if (arrayLength > 0) {
+						// So, path is an array
+						// Then add each entry of the array to the newEntries list
+						for (int i = 0; i < arrayLength; i++) {
+							newEntries.add(path + "[" + i + "]");
+						}
+					} else {
+						// This is not an array, simply add path to the newEntries list
+						newEntries.add(path);
+					}
 				}
 			}
 

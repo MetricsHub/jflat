@@ -100,3 +100,46 @@ public class Main {
 
 }
 ```
+
+# Wildcard Support for Object Keys
+
+When a JSON structure uses dynamic object keys (e.g. a map of items keyed by UID), use the `*` wildcard in the entry key path to expand all direct children of that object into individual CSV rows.
+
+For example, given the following JSON:
+
+```json
+{
+  "members": {
+    "abc123": { "id": 0, "name": "Drive 0", "type": { "default": "NVMe" } },
+    "def456": { "id": 1, "name": "Drive 1", "type": { "default": "NVMe" } }
+  }
+}
+```
+
+Use `*` to iterate over all children of `members`:
+
+```Java
+JFlat jFlat = new JFlat(json);
+jFlat.parse();
+
+// List all entries under members
+System.out.print(jFlat.toCSV("/members/*", null, ";"));
+// Output:
+// /members/abc123;
+// /members/def456;
+
+// Extract properties (including nested paths)
+System.out.print(jFlat.toCSV("/members/*", new String[] { "id", "name", "type/default" }, ";"));
+// Output:
+// /members/abc123;0;Drive 0;NVMe;
+// /members/def456;1;Drive 1;NVMe;
+```
+
+## Escaping the Wildcard
+
+If you have a JSON property literally named `*`, escape it with a backslash:
+
+```Java
+// Refers to the literal property "*" under members, not a wildcard
+jFlat.toCSV("/members/\\*", new String[] { "name" }, ";");
+```
