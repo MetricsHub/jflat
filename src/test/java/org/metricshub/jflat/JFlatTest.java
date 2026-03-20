@@ -69,13 +69,14 @@ public class JFlatTest {
 		simple.parse();
 		assertEquals("[0];\n[1];\n", simple.toCSV("/", null, null).toString());
 		assertEquals("[0]/attribute1;\n[1]/attribute1;\n", simple.toCSV("/attribute1", null, null).toString());
+		assertEquals("[0]/attribute1;\n[1]/attribute1;\n", simple.toCSV("/*/attribute1", null, null).toString());
 		assertEquals(
 			"[0]/arrayA[0];\n[0]/arrayA[1];\n[0]/arrayA[2];\n[1]/arrayA[0];\n[1]/arrayA[1];\n[1]/arrayA[2];\n",
 			simple.toCSV("/arrayA", null, null).toString()
 		);
 		assertEquals(
 			"[0]/arrayB[0]/id;\n[0]/arrayB[1]/id;\n[0]/arrayB[2]/id;\n[1]/arrayB[0]/id;\n[1]/arrayB[1]/id;\n[1]/arrayB[2]/id;\n",
-			simple.toCSV("/arrayB/id", null, null).toString()
+			simple.toCSV("/arrayB/*/id", null, null).toString()
 		);
 		assertEquals("", simple.toCSV("/nonexistent", null, null).toString());
 	}

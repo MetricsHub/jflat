@@ -49,9 +49,9 @@ import javax.json.stream.JsonParsingException;
  */
 public class JFlat {
 
-	private TreeMap<String, String> map = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER); // IMPORTANT: The map is case iNsEnSiTiVe!
-	private ArrayList<String> arrayPaths = new ArrayList<String>();
-	private ArrayList<Integer> arrayLengths = new ArrayList<Integer>();
+	private TreeMap<String, String> map = new TreeMap<>(String.CASE_INSENSITIVE_ORDER); // IMPORTANT: The map is case iNsEnSiTiVe!
+	private ArrayList<String> arrayPaths = new ArrayList<>();
+	private ArrayList<Integer> arrayLengths = new ArrayList<>();
 	private Reader inputReader;
 	private boolean parsed = false;
 
@@ -115,9 +115,7 @@ public class JFlat {
 			throw new IOException(e.getCause());
 		} finally {
 			// In any case, close the reader
-			if (reader != null) {
-				reader.close();
-			}
+			reader.close();
 		}
 
 		// Parse it and build the hash map
@@ -169,9 +167,9 @@ public class JFlat {
 				}
 
 				// Go through each property of the object
-				for (String name : object.keySet()) {
+				for (Entry<String, JsonValue> entry : object.entrySet()) {
 					// The syntax of the path is object.propertyA
-					navigateTree(object.get(name), path + "/" + name, removeNodes);
+					navigateTree(entry.getValue(), path + "/" + entry.getKey(), removeNodes);
 				}
 				break;
 			case ARRAY:
@@ -343,7 +341,7 @@ public class JFlat {
 		}
 
 		// Build the list of entries that will constitutes CSV records (new lines)
-		ArrayList<String> entries = new ArrayList<String>();
+		ArrayList<String> entries = new ArrayList<>();
 
 		// csvEntryKey is specified as a path (e.g. /objectA/array1/subobject)
 		// We will deconstruct the specified path and check whether each "subfolder" is an array or not
@@ -401,54 +399,92 @@ public class JFlat {
 			}
 
 			// Temporary list where we will store the new entries
-			ArrayList<String> newEntries = new ArrayList<String>();
+			ArrayList<String> newEntries = new ArrayList<>();
 			// Set of lower-cased paths already added, used for O(1) case-insensitive dedup
-			Set<String> seenLowercasePaths = new HashSet<String>();
+			Set<String> seenLowercasePaths = new HashSet<>();
 
 			for (String existingEntry : entries) {
 				if (isWildcard) {
-					// We iterate over keys in the map that are at or after the current entry's
-					// prefix (e.g. "/members/") and stop once keys no longer match that prefix.
-					// From each matching key, we extract the immediate child name by looking for
-					// the next "/" or "[" delimiter, which marks a deeper level or an array index.
-					// Duplicates are skipped (case-insensitive) to ensure each child appears once.
-					String prefix = existingEntry.equals("/") ? "/" : existingEntry + "/";
-					for (String key : map.tailMap(prefix, true).keySet()) {
-						// Stop once keys are no longer under the prefix (taking case-insensitive match into account)
-						if (!key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+					// Case 1: Check if existingEntry is itself an array path.
+					// If so, expand its indices just like the non-wildcard array logic.
+					int entryArrayLength = 0;
+					for (int i = 0; i < arrayPaths.size(); i++) {
+						if (existingEntry.equalsIgnoreCase(arrayPaths.get(i))) {
+							entryArrayLength = arrayLengths.get(i);
 							break;
 						}
-						// Only consider keys that are strictly under the prefix
-						if (key.length() > prefix.length()) {
-							// Extract the portion after the prefix, e.g. "abc123/name" from "/members/abc123/name"
-							String remainder = key.substring(prefix.length());
+					}
 
-							// Find the boundary of the immediate child name:
-							// - "/" indicates a deeper nested property
-							// - "[" indicates an array index
-							// The child name is everything before the first such delimiter.
-							int slashPos = remainder.indexOf('/');
-							int bracketPos = remainder.indexOf('[');
-							String childName;
-							if (slashPos == -1 && bracketPos == -1) {
-								// No delimiter: the remainder itself is the child name (leaf key)
-								childName = remainder;
-							} else if (slashPos == -1) {
-								// Only "[" found: child has array children (e.g. "args[0]")
-								childName = remainder.substring(0, bracketPos);
-							} else if (bracketPos == -1) {
-								// Only "/" found: child has nested properties (e.g. "abc123/name")
-								childName = remainder.substring(0, slashPos);
-							} else {
-								// Both found: take the earlier delimiter
-								childName = remainder.substring(0, Math.min(slashPos, bracketPos));
+					if (entryArrayLength > 0) {
+						// existingEntry is an array, expand its indices
+						for (int i = 0; i < entryArrayLength; i++) {
+							newEntries.add(existingEntry + "[" + i + "]");
+						}
+					} else {
+						// Case 2: Check if this entry was produced by a previous array expansion
+						// (i.e. it ends with [n] and the parent path is in arrayPaths).
+						// In that case, the wildcard is redundant — just pass through.
+						boolean fromArrayExpansion = false;
+						int lastBracket = existingEntry.lastIndexOf('[');
+						if (lastBracket >= 0) {
+							String parentPath = existingEntry.substring(0, lastBracket);
+							for (int i = 0; i < arrayPaths.size(); i++) {
+								if (parentPath.equalsIgnoreCase(arrayPaths.get(i))) {
+									fromArrayExpansion = true;
+									break;
+								}
 							}
+						}
 
-							// Add the child path if it's valid and not already seen (case-insensitive)
-							if (!childName.isEmpty()) {
-								String childPath = prefix + childName;
-								if (seenLowercasePaths.add(childPath.toLowerCase(Locale.ROOT))) {
-									newEntries.add(childPath);
+						if (fromArrayExpansion) {
+							// Already expanded from an array, pass through unchanged
+							newEntries.add(existingEntry);
+						} else {
+							// Case 3: Expand all direct object children.
+							// We iterate over keys in the map that are at or after the current entry's
+							// prefix (e.g. "/members/") and stop once keys no longer match that prefix.
+							// From each matching key, we extract the immediate child name by looking for
+							// the next "/" or "[" delimiter, which marks a deeper level or an array index.
+							// Duplicates are skipped (case-insensitive) to ensure each child appears once.
+							String prefix = existingEntry.equals("/") ? "/" : existingEntry + "/";
+							for (String key : map.tailMap(prefix, true).keySet()) {
+								// Stop once keys are no longer under the prefix
+								if (!key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+									break;
+								}
+								// Only consider keys that are strictly under the prefix
+								if (key.length() > prefix.length()) {
+									// Extract the portion after the prefix, e.g. "abc123/name" from "/members/abc123/name"
+									String remainder = key.substring(prefix.length());
+
+									// Find the boundary of the immediate child name:
+									// - "/" indicates a deeper nested property
+									// - "[" indicates an array index
+									// The child name is everything before the first such delimiter.
+									int slashPos = remainder.indexOf('/');
+									int bracketPos = remainder.indexOf('[');
+									String childName;
+									if (slashPos == -1 && bracketPos == -1) {
+										// No delimiter: the remainder itself is the child name (leaf key)
+										childName = remainder;
+									} else if (slashPos == -1) {
+										// Only "[" found: child has array children (e.g. "args[0]")
+										childName = remainder.substring(0, bracketPos);
+									} else if (bracketPos == -1) {
+										// Only "/" found: child has nested properties (e.g. "abc123/name")
+										childName = remainder.substring(0, slashPos);
+									} else {
+										// Both found: take the earlier delimiter
+										childName = remainder.substring(0, Math.min(slashPos, bracketPos));
+									}
+
+									// Add the child path if it's valid and not already seen (case-insensitive)
+									if (!childName.isEmpty()) {
+										String childPath = prefix + childName;
+										if (seenLowercasePaths.add(childPath.toLowerCase(Locale.ROOT))) {
+											newEntries.add(childPath);
+										}
+									}
 								}
 							}
 						}
