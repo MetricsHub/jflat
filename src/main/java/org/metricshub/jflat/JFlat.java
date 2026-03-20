@@ -393,9 +393,9 @@ public class JFlat {
 			// Escaping: if a JSON property is literally named "*", use "\*" in the path
 			// to refer to it without triggering wildcard expansion.
 			boolean isWildcard = "*".equals(pathElement);
-			if (pathElement.startsWith("\\")) {
-				// Strip the escape backslash and treat the rest as a literal property name
-				pathElement = pathElement.substring(1);
+			if ("\\*".equals(pathElement)) {
+				// Strip the escape backslash and treat "*" as a literal property name
+				pathElement = "*";
 				isWildcard = false;
 			}
 
