@@ -76,6 +76,10 @@ public class JFlatTest {
 		);
 		assertEquals(
 			"[0]/arrayB[0]/id;\n[0]/arrayB[1]/id;\n[0]/arrayB[2]/id;\n[1]/arrayB[0]/id;\n[1]/arrayB[1]/id;\n[1]/arrayB[2]/id;\n",
+			simple.toCSV("/arrayB/id", null, null).toString()
+		);
+		assertEquals(
+			"[0]/arrayB[0]/id;\n[0]/arrayB[1]/id;\n[0]/arrayB[2]/id;\n[1]/arrayB[0]/id;\n[1]/arrayB[1]/id;\n[1]/arrayB[2]/id;\n",
 			simple.toCSV("/arrayB/*/id", null, null).toString()
 		);
 		assertEquals("", simple.toCSV("/nonexistent", null, null).toString());
