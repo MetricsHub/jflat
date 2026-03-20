@@ -26,6 +26,7 @@ import java.io.StringReader;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -446,7 +447,7 @@ public class JFlat {
 							// Add the child path if it's valid and not already seen (case-insensitive)
 							if (!childName.isEmpty()) {
 								String childPath = prefix + childName;
-								if (seenLowercasePaths.add(childPath.toLowerCase())) {
+								if (seenLowercasePaths.add(childPath.toLowerCase(Locale.ROOT))) {
 									newEntries.add(childPath);
 								}
 							}
