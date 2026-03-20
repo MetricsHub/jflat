@@ -25,7 +25,9 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.TreeMap;
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -399,6 +401,8 @@ public class JFlat {
 
 			// Temporary list where we will store the new entries
 			ArrayList<String> newEntries = new ArrayList<String>();
+			// Set of lower-cased paths already added, used for O(1) case-insensitive dedup
+			Set<String> seenLowercasePaths = new HashSet<String>();
 
 			for (String existingEntry : entries) {
 				if (isWildcard) {
@@ -436,18 +440,10 @@ public class JFlat {
 								childName = remainder.substring(0, Math.min(slashPos, bracketPos));
 							}
 
-							// Add the child path if it's valid and not already in the list
+							// Add the child path if it's valid and not already seen (case-insensitive)
 							if (!childName.isEmpty()) {
 								String childPath = prefix + childName;
-								// Deduplicate (case-insensitive, consistent with the TreeMap)
-								boolean alreadyAdded = false;
-								for (String added : newEntries) {
-									if (added.equalsIgnoreCase(childPath)) {
-										alreadyAdded = true;
-										break;
-									}
-								}
-								if (!alreadyAdded) {
+								if (seenLowercasePaths.add(childPath.toLowerCase())) {
 									newEntries.add(childPath);
 								}
 							}
