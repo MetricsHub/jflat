@@ -407,16 +407,19 @@ public class JFlat {
 
 			for (String existingEntry : entries) {
 				if (isWildcard) {
-					// Wildcard expansion: scan the flat map for all direct children of existingEntry.
-					// We iterate over every key in the map and find those that start with the
-					// current entry's prefix (e.g. "/members/"). From each matching key, we
-					// extract the immediate child name by looking for the next "/" or "["
-					// delimiter, which marks a deeper level or an array index.
+					// We iterate over keys in the map that are at or after the current entry's
+					// prefix (e.g. "/members/") and stop once keys no longer match that prefix.
+					// From each matching key, we extract the immediate child name by looking for
+					// the next "/" or "[" delimiter, which marks a deeper level or an array index.
 					// Duplicates are skipped (case-insensitive) to ensure each child appears once.
 					String prefix = existingEntry.equals("/") ? "/" : existingEntry + "/";
-					for (String key : map.keySet()) {
+					for (String key : map.tailMap(prefix, true).keySet()) {
+						// Stop once keys are no longer under the prefix (taking case-insensitive match into account)
+						if (!key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+							break;
+						}
 						// Only consider keys that are strictly under the prefix
-						if (key.length() > prefix.length() && key.regionMatches(true, 0, prefix, 0, prefix.length())) {
+						if (key.length() > prefix.length()) {
 							// Extract the portion after the prefix, e.g. "abc123/name" from "/members/abc123/name"
 							String remainder = key.substring(prefix.length());
 
