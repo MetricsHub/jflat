@@ -30,6 +30,10 @@ public class JFlatTest {
 		jFlat = new JFlat(getResourceAsString("/large.json"));
 		jFlat.parse();
 		assertEquals(getResourceAsString("/large-flatMap.txt"), jFlat.getFlatTree().toString());
+
+		jFlat = new JFlat(getResourceAsString("/object-keys.json"));
+		jFlat.parse();
+		assertEquals(getResourceAsString("/object-keys-flatMap.txt"), jFlat.getFlatTree().toString());
 	}
 
 	@Test
@@ -65,6 +69,7 @@ public class JFlatTest {
 		simple.parse();
 		assertEquals("[0];\n[1];\n", simple.toCSV("/", null, null).toString());
 		assertEquals("[0]/attribute1;\n[1]/attribute1;\n", simple.toCSV("/attribute1", null, null).toString());
+		assertEquals("[0]/attribute1;\n[1]/attribute1;\n", simple.toCSV("/*/attribute1", null, null).toString());
 		assertEquals(
 			"[0]/arrayA[0];\n[0]/arrayA[1];\n[0]/arrayA[2];\n[1]/arrayA[0];\n[1]/arrayA[1];\n[1]/arrayA[2];\n",
 			simple.toCSV("/arrayA", null, null).toString()
@@ -72,6 +77,10 @@ public class JFlatTest {
 		assertEquals(
 			"[0]/arrayB[0]/id;\n[0]/arrayB[1]/id;\n[0]/arrayB[2]/id;\n[1]/arrayB[0]/id;\n[1]/arrayB[1]/id;\n[1]/arrayB[2]/id;\n",
 			simple.toCSV("/arrayB/id", null, null).toString()
+		);
+		assertEquals(
+			"[0]/arrayB[0]/id;\n[0]/arrayB[1]/id;\n[0]/arrayB[2]/id;\n[1]/arrayB[0]/id;\n[1]/arrayB[1]/id;\n[1]/arrayB[2]/id;\n",
+			simple.toCSV("/arrayB/*/id", null, null).toString()
 		);
 		assertEquals("", simple.toCSV("/nonexistent", null, null).toString());
 	}
@@ -100,6 +109,56 @@ public class JFlatTest {
 		);
 
 		assertEquals("[0] {object} \n[1] {object} \n", simple.toCSV("/", new String[] { "." }, " ").toString());
+	}
+
+	@Test
+	void csvWildcard() throws IllegalStateException, ParseException, IOException {
+		JFlat nodeDrives = new JFlat(getResourceAsString("/object-keys.json"));
+		nodeDrives.parse();
+
+		// Wildcard to list all drive entries
+		assertEquals(
+			"/members/2415********************************;\n" +
+			"/members/4959********************************;\n" +
+			"/members/93a3********************************;\n" +
+			"/members/9f02********************************;\n",
+			nodeDrives.toCSV("/members/*", null, ";").toString()
+		);
+
+		// Wildcard with id and name properties
+		assertEquals(
+			"/members/2415********************************;1;Internal Drive 1;\n" +
+			"/members/4959********************************;0;Internal Drive 0;\n" +
+			"/members/93a3********************************;0;Internal Drive 0;\n" +
+			"/members/9f02********************************;1;Internal Drive 1;\n",
+			nodeDrives.toCSV("/members/*", new String[] { "id", "name" }, ";").toString()
+		);
+
+		// Wildcard with nested paths
+		assertEquals(
+			"/members/2415********************************;Internal Drive 1;416Y******91;NVMe;\n" +
+			"/members/4959********************************;Internal Drive 0;416Y******91;NVMe;\n" +
+			"/members/93a3********************************;Internal Drive 0;214F******S1;NVMe;\n" +
+			"/members/9f02********************************;Internal Drive 1;214F******S1;NVMe;\n",
+			nodeDrives
+				.toCSV("/members/*", new String[] { "name", "manufacturing/serialNumber", "type/default" }, ";")
+				.toString()
+		);
+	}
+
+	@Test
+	void csvWildcardEscape() throws IllegalStateException, ParseException, IOException {
+		JFlat jFlat = new JFlat(getResourceAsString("/wildcard-key.json"));
+		jFlat.parse();
+
+		// Wildcard "*" expands all children of "items"
+		assertEquals(
+			"/items/*;1;star;\n/items/alpha;2;alpha;\n/items/beta;3;beta;\n",
+			jFlat.toCSV("/items/*", new String[] { "id", "name" }, ";").toString()
+		);
+
+		// Escaped "\*" targets only the literal "*" property
+		assertEquals("/items/*;1;star;\n", jFlat.toCSV("/items/\\*", new String[] { "id", "name" }, ";").toString());
 	}
 
 	/**

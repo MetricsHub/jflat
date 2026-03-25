@@ -1,0 +1,122 @@
+{
+  "version": "00000000000000000001",
+  "arraySerialNumber": "CZ22****NQ",
+  "members": {
+    "4959********************************": {
+      "uid": "4959********************************",
+      "uri": "/api/v3/node-drives/***REDACTED***",
+      "systemWWN": "2FF7********8C3B",
+      "displayname": {
+        "key": "NODE_IDE_NAME",
+        "args": [1, 0],
+        "default": "Controller Node - 1, Boot Drive - 0"
+      },
+      "domain": "",
+      "nodeUid": "98d3************************85bc",
+      "nodeId": 1,
+      "name": "Internal Drive 0",
+      "id": 0,
+      "type": { "key": "drive_type-4", "default": "NVMe" },
+      "manufacturing": {
+        "model": "KXG6AZNV1T02",
+        "manufacturer": "Toshiba",
+        "serialNumber": "416Y******91",
+        "sparePartNumber": "P22***-001"
+      },
+      "fwVersion": "AGGA5104",
+      "sizeMiB": 976762,
+      "maxLBA": "773BD2AF",
+      "wwn": "8CE3********56E9",
+      "sedState": { "key": "disk_sed_state-2", "default": "Capable" },
+      "lastModifiedEpoch": 1762265949,
+      "lastModifiedEpochMS": 1762265949543
+    },
+    "2415********************************": {
+      "uid": "2415********************************",
+      "uri": "/api/v3/node-drives/***REDACTED***",
+      "systemWWN": "2FF7********8C3B",
+      "displayname": {
+        "key": "NODE_IDE_NAME",
+        "args": [1, 1],
+        "default": "Controller Node - 1, Boot Drive - 1"
+      },
+      "domain": "",
+      "nodeUid": "98d3************************85bc",
+      "nodeId": 1,
+      "name": "Internal Drive 1",
+      "id": 1,
+      "type": { "key": "drive_type-4", "default": "NVMe" },
+      "manufacturing": {
+        "model": "KXG6AZNV1T02",
+        "manufacturer": "Toshiba",
+        "serialNumber": "416Y******91",
+        "sparePartNumber": "P22***-001"
+      },
+      "fwVersion": "AGGA5104",
+      "sizeMiB": 976762,
+      "maxLBA": "773BD2AF",
+      "wwn": "8CE3********56D0",
+      "sedState": { "key": "disk_sed_state-2", "default": "Capable" },
+      "lastModifiedEpoch": 1762265949,
+      "lastModifiedEpochMS": 1762265949543
+    },
+    "93a3********************************": {
+      "uid": "93a3********************************",
+      "uri": "/api/v3/node-drives/***REDACTED***",
+      "systemWWN": "2FF7********8C3B",
+      "displayname": {
+        "key": "NODE_IDE_NAME",
+        "args": [0, 0],
+        "default": "Controller Node - 0, Boot Drive - 0"
+      },
+      "domain": "",
+      "nodeUid": "f54d************************f9c5",
+      "nodeId": 0,
+      "name": "Internal Drive 0",
+      "id": 0,
+      "type": { "key": "drive_type-4", "default": "NVMe" },
+      "manufacturing": {
+        "model": "KXG6AZNV1T02",
+        "manufacturer": "Toshiba",
+        "serialNumber": "214F******S1",
+        "sparePartNumber": "P22***-001"
+      },
+      "fwVersion": "AGGA5104",
+      "sizeMiB": 976762,
+      "maxLBA": "773BD2AF",
+      "wwn": "8CE3********3A98",
+      "sedState": { "key": "disk_sed_state-2", "default": "Capable" },
+      "lastModifiedEpoch": 1762265949,
+      "lastModifiedEpochMS": 1762265949543
+    },
+    "9f02********************************": {
+      "uid": "9f02********************************",
+      "uri": "/api/v3/node-drives/***REDACTED***",
+      "systemWWN": "2FF7********8C3B",
+      "displayname": {
+        "key": "NODE_IDE_NAME",
+        "args": [0, 1],
+        "default": "Controller Node - 0, Boot Drive - 1"
+      },
+      "domain": "",
+      "nodeUid": "f54d************************f9c5",
+      "nodeId": 0,
+      "name": "Internal Drive 1",
+      "id": 1,
+      "type": { "key": "drive_type-4", "default": "NVMe" },
+      "manufacturing": {
+        "model": "KXG6AZNV1T02",
+        "manufacturer": "Toshiba",
+        "serialNumber": "214F******S1",
+        "sparePartNumber": "P22***-001"
+      },
+      "fwVersion": "AGGA5104",
+      "sizeMiB": 976762,
+      "maxLBA": "773BD2AF",
+      "wwn": "8CE3********395E",
+      "sedState": { "key": "disk_sed_state-2", "default": "Capable" },
+      "lastModifiedEpoch": 1762265949,
+      "lastModifiedEpochMS": 1762265949543
+    }
+  }
+}
