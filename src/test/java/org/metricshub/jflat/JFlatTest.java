@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.text.ParseException;
@@ -78,6 +79,23 @@ public class JFlatTest {
 			() -> wrong.parse(),
 			"JSON document with syntax error should trigger a ParseException error"
 		);
+
+		// reader that fails: IOException, and the reader is closed
+		boolean[] closed = new boolean[1];
+		Reader failing = new Reader() {
+			@Override
+			public int read(char[] buffer, int offset, int length) throws IOException {
+				throw new IOException("Read failure");
+			}
+
+			@Override
+			public void close() {
+				closed[0] = true;
+			}
+		};
+		JFlat broken = new JFlat(failing, streaming);
+		assertThrows(IOException.class, () -> broken.parse(), "A reader that fails should trigger an IOException");
+		assertTrue(closed[0], "The reader should be closed");
 	}
 
 	@ParameterizedTest

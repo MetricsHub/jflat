@@ -195,21 +195,22 @@ public class JFlat {
 	}
 
 	/**
-	 * Read the whole content of a reader
+	 * Read the whole content of a reader, and close it (even when it cannot be read)
 	 *
 	 * @param reader The reader
 	 * @return The content
 	 * @throws IOException when the reader cannot be read
 	 */
 	private static String readAll(Reader reader) throws IOException {
-		StringBuilder content = new StringBuilder();
-		char[] buffer = new char[8192];
-		int length;
-		while ((length = reader.read(buffer)) > 0) {
-			content.append(buffer, 0, length);
+		try (Reader input = reader) {
+			StringBuilder content = new StringBuilder();
+			char[] buffer = new char[8192];
+			int length;
+			while ((length = input.read(buffer)) != -1) {
+				content.append(buffer, 0, length);
+			}
+			return content.toString();
 		}
-		reader.close();
-		return content.toString();
 	}
 
 	/**
