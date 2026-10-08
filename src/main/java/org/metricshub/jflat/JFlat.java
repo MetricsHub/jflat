@@ -25,8 +25,11 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -40,10 +43,18 @@ import javax.json.JsonString;
 import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import javax.json.stream.JsonLocation;
+import javax.json.stream.JsonParser;
+import javax.json.stream.JsonParser.Event;
 import javax.json.stream.JsonParsingException;
 
 /**
  * Provides tools to convert a JSON-formated content to a flat structure, exported as a String.
+ * <p>
+ * In streaming mode (see {@link #JFlat(String, boolean)}), {@link #toCSV(String, String[], String)} reads the
+ * document again and flattens the value of the first element of the entry key one array element at a time,
+ * instead of keeping a map of the whole document: the memory used is bounded by the size of one element. The
+ * result is the same as in the default mode; the documents that cannot be streamed exactly (see
+ * {@link #toCSV(String, String[], String)}) are processed as in the default mode.
  * @author Bertrand Martin
  *
  */
@@ -55,20 +66,55 @@ public class JFlat {
 	private Reader inputReader;
 	private boolean parsed = false;
 
+	// Streaming mode: the source is kept to be read again, and the map of the whole document is only built when
+	// needed (getFlatTree(), or a document that cannot be streamed)
+	private boolean streaming;
+	private String source;
+	private boolean removeNodes;
+	private boolean fullMap;
+
 	/**
 	 * Create a new JFlat instance
 	 *
 	 * @param pJsonReader A Reader object (can be StringReader, FileReader, etc.)
 	 */
 	public JFlat(Reader pJsonReader) {
+		this(pJsonReader, false);
+	}
+
+	/**
+	 * Create a new JFlat instance
+	 *
+	 * @param pJsonReader A Reader object (can be StringReader, FileReader, etc.), read entirely by parse() in
+	 *                    streaming mode
+	 * @param pStreaming Whether toCSV() streams the document instead of keeping a map of all its nodes
+	 */
+	public JFlat(Reader pJsonReader, boolean pStreaming) {
 		inputReader = pJsonReader;
+		streaming = pStreaming;
 	}
 
 	/**
 	 * @param pJsonSource JSON source to be parsed
 	 */
 	public JFlat(String pJsonSource) {
-		this(pJsonSource == null ? new StringReader("") : new StringReader(pJsonSource));
+		this(pJsonSource, false);
+	}
+
+	/**
+	 * @param pJsonSource JSON source to be parsed
+	 * @param pStreaming Whether toCSV() streams the document instead of keeping a map of all its nodes
+	 */
+	public JFlat(String pJsonSource, boolean pStreaming) {
+		this(pJsonSource == null ? new StringReader("") : new StringReader(pJsonSource), pStreaming);
+		source = pJsonSource == null ? "" : pJsonSource;
+	}
+
+	/**
+	 * Container of the map of one unit of a streamed document
+	 */
+	private JFlat() {
+		this((Reader) null, false);
 	}
 
 	/**
@@ -87,7 +133,8 @@ public class JFlat {
 	/**
 	 * Parse the JSON document
 	 * <p>
-	 * This call is mandatory before doing any other operation.
+	 * This call is mandatory before doing any other operation. In streaming mode, the document is only checked:
+	 * nothing is kept but the source.
 	 *
 	 * @param removeNodes Whether to remove "artificial" nodes without values ({object} and {array})
 	 *
@@ -96,6 +143,21 @@ public class JFlat {
 	 * @throws IllegalStateException when... actually never in a single-thread context
 	 */
 	public void parse(boolean removeNodes) throws ParseException, IOException, IllegalStateException {
+		if (streaming) {
+			this.removeNodes = removeNodes;
+			if (source == null) {
+				source = readAll(inputReader);
+			}
+			if (isStreamable(source)) {
+				parsed = true;
+				return;
+			}
+
+			// Not a document the streaming mode can read: parse it as usual, which throws the same exceptions
+			inputReader = new StringReader(source);
+			fullMap = true;
+		}
+
 		// Read the JSON source
 		JsonReader reader = Json.createReader(inputReader);
 		JsonStructure root;
@@ -130,6 +192,73 @@ public class JFlat {
 
 		// Remember that the parsing has been done
 		parsed = true;
+	}
+
+	/**
+	 * Read the whole content of a reader
+	 *
+	 * @param reader The reader
+	 * @return The content
+	 * @throws IOException when the reader cannot be read
+	 */
+	private static String readAll(Reader reader) throws IOException {
+		StringBuilder content = new StringBuilder();
+		char[] buffer = new char[8192];
+		int length;
+		while ((length = reader.read(buffer)) > 0) {
+			content.append(buffer, 0, length);
+		}
+		reader.close();
+		return content.toString();
+	}
+
+	/**
+	 * Check, with the streaming parser, that the document is an object or an array that the default mode can read
+	 * (what follows the root value is ignored, as by the default mode)
+	 *
+	 * @param json The JSON document
+	 * @return true when the document can be streamed
+	 */
+	private static boolean isStreamable(String json) {
+		JsonParser parser = Json.createParser(new StringReader(json));
+		try {
+			Event event = parser.next();
+			if (event != Event.START_OBJECT && event != Event.START_ARRAY) {
+				return false;
+			}
+			int depth = 1;
+			while (depth > 0) {
+				event = parser.next();
+				if (event == Event.START_OBJECT || event == Event.START_ARRAY) {
+					depth++;
+				} else if (event == Event.END_OBJECT || event == Event.END_ARRAY) {
+					depth--;
+				} else if (event == Event.VALUE_NUMBER) {
+					// The default mode converts every number, which fails on an out-of-range exponent
+					parser.getValue();
+				}
+			}
+			return true;
+		} catch (RuntimeException e) {
+			return false;
+		} finally {
+			parser.close();
+		}
+	}
+
+	/**
+	 * Build the map of the whole document of a streaming instance
+	 */
+	private void buildFullMap() {
+		streaming = false;
+		inputReader = new StringReader(source);
+		try {
+			parse(removeNodes);
+		} catch (ParseException | IOException e) {
+			// The document was checked by parse()
+			throw new IllegalStateException("JSON document cannot be parsed again", e);
+		}
+		fullMap = true;
 	}
 
 	/**
@@ -234,6 +363,11 @@ public class JFlat {
 			throw new IllegalStateException("JSON document has not been parsed");
 		}
 
+		// The flat tree is the map of the whole document
+		if (streaming && !fullMap) {
+			buildFullMap();
+		}
+
 		// Use a StringBuilder to hold the result
 		StringBuilder result = new StringBuilder();
 
@@ -279,6 +413,15 @@ public class JFlat {
 
 	/**
 	 * Translates (flattens) a JSON structure into a CSV string
+	 * <p>
+	 * In streaming mode, the document is read again and the value of the first element of the entry key
+	 * (<code>items</code> in <code>/items/status/conditions</code>) is flattened one array element at a time (or
+	 * as a single unit when it is not a non-empty array), skipping the nodes that neither the entry key nor the
+	 * properties can reach. The document is processed as in the default mode when it cannot be streamed exactly:
+	 * root array, entry key <code>/</code>, first element of the entry key that is a wildcard or contains an index,
+	 * first element of the entry key present more than once in the root object (whatever the case), root key that
+	 * contains <code>/</code> or <code>[</code>, property that refers to a node above the unit
+	 * (<code>../kind</code> from <code>/items</code>), or a duplicate key in an object of a unit.
 	 *
 	 * @param csvEntryKey The key in the JSON data that will be shown as a new entry in the resulting CSV (i.e. a new line)
 	 * @param csvProperties Array of strings specifying the properties of the entry key to be added to the CSV as new fields
@@ -322,6 +465,15 @@ public class JFlat {
 		// Default separator is ";"
 		if (separator == null) {
 			separator = ";";
+		}
+
+		// Streaming mode: process the document one unit at a time, unless it cannot be streamed exactly
+		if (streaming && !fullMap) {
+			try {
+				return streamToCSV(csvEntryKey, csvProperties, separator);
+			} catch (NotStreamableException e) {
+				buildFullMap();
+			}
 		}
 
 		// Initialize the StringBuilder to hold the result
@@ -377,7 +529,35 @@ public class JFlat {
 		}
 
 		// Now, process each element, as described above
-		for (String pathElement : pathElementArray) {
+		entries = expandEntries(entries, pathElementArray, 0);
+
+		// And now, build the CSV
+		try {
+			appendRows(entries, csvProperties, separator, null, csvResult);
+		} catch (NotStreamableException e) {
+			// Only raised for a unit of a streamed document
+			throw new IllegalStateException(e);
+		}
+
+		// Return
+		return csvResult;
+	}
+
+	/**
+	 * Expand the entries with the elements of the entry key path
+	 *
+	 * @param entries The entries at the start
+	 * @param pathElementArray The elements of the entry key path
+	 * @param start The index of the first element to process
+	 * @return The expanded entries
+	 */
+	private ArrayList<String> expandEntries(ArrayList<String> entries, String[] pathElementArray, int start) {
+		int arrayLength;
+
+		// Now, process each element, as described above
+		for (int e = start; e < pathElementArray.length; e++) {
+			String pathElement = pathElementArray[e];
+
 			// Empty pathElement? Skip.
 			if (pathElement == null || pathElement.isEmpty()) {
 				continue;
@@ -523,6 +703,26 @@ public class JFlat {
 			entries = newEntries;
 		}
 
+		return entries;
+	}
+
+	/**
+	 * Append the CSV rows of the entries
+	 *
+	 * @param entries The entries
+	 * @param csvProperties The properties of each entry
+	 * @param separator The separator between fields
+	 * @param unitPath The path of the streamed unit that holds the entries, null for the map of the whole document
+	 * @param csvResult Where the rows are appended
+	 * @throws NotStreamableException when a property refers to a node above the unit
+	 */
+	private void appendRows(
+		List<String> entries,
+		String[] csvProperties,
+		String separator,
+		String unitPath,
+		StringBuilder csvResult
+	) throws NotStreamableException {
 		// And now, build the CSV
 		for (String entry : entries) {
 			// Check that the entry actually exists (in case, the user has put an invalid entryKey)
@@ -554,6 +754,10 @@ public class JFlat {
 				while (path.contains("/../")) {
 					int pos2 = path.indexOf("/../");
 					int pos1 = path.lastIndexOf("/", pos2 - 1);
+					// A streamed unit only holds its own nodes
+					if (unitPath != null && pos1 < unitPath.length()) {
+						throw new NotStreamableException();
+					}
 					path = path.substring(0, pos1) + path.substring(pos2 + 3);
 				}
 
@@ -570,8 +774,345 @@ public class JFlat {
 			// End of line, new record!
 			csvResult.append("\n");
 		}
+	}
 
-		// Return
+	/**
+	 * Raised when a document cannot be streamed exactly
+	 */
+	private static final class NotStreamableException extends Exception {
+
+		private static final long serialVersionUID = 1L;
+
+		NotStreamableException() {
+			super(null, null, false, false);
+		}
+	}
+
+	/**
+	 * Translates the source into a CSV string in streaming mode
+	 *
+	 * @param csvEntryKey The entry key (as specified)
+	 * @param csvProperties The cleaned properties
+	 * @param separator The separator between fields
+	 * @return The CSV string
+	 * @throws NotStreamableException when the document cannot be streamed exactly
+	 */
+	private StringBuilder streamToCSV(String csvEntryKey, String[] csvProperties, String separator)
+		throws NotStreamableException {
+		// Same entry key as the default mode
+		String entryKey = csvEntryKey.isEmpty() ? "/" : csvEntryKey;
+		if (!entryKey.startsWith("/")) {
+			entryKey = "/" + entryKey;
+		}
+		String[] pathElementArray = entryKey.split("/");
+
+		// The first element selects the value of the root object that is streamed
+		int first = 0;
+		while (first < pathElementArray.length && pathElementArray[first].isEmpty()) {
+			first++;
+		}
+		if (first == pathElementArray.length) {
+			throw new NotStreamableException();
+		}
+		String firstElement = pathElementArray[first];
+		if ("*".equals(firstElement) || firstElement.indexOf('[') >= 0 || firstElement.indexOf(']') >= 0) {
+			throw new NotStreamableException();
+		}
+		if ("\\*".equals(firstElement)) {
+			firstElement = "*";
+		}
+
+		// What the units must keep, null to keep everything
+		PathNode needed = neededPaths(pathElementArray, first + 1, csvProperties);
+
+		StringBuilder csvResult = new StringBuilder();
+		JsonParser parser = Json.createParser(new StringReader(source));
+		try {
+			if (parser.next() != Event.START_OBJECT) {
+				throw new NotStreamableException();
+			}
+
+			boolean found = false;
+			Event event;
+			while ((event = parser.next()) != Event.END_OBJECT) {
+				String key = parser.getString();
+				if (key.indexOf('/') >= 0 || key.indexOf('[') >= 0) {
+					throw new NotStreamableException();
+				}
+				event = parser.next();
+				if (!key.equalsIgnoreCase(firstElement)) {
+					skipValue(parser, event);
+					continue;
+				}
+
+				// The default mode merges the keys that differ only by case and keeps the last duplicate
+				if (found) {
+					throw new NotStreamableException();
+				}
+				found = true;
+
+				String documentPath = "/" + key;
+				String entryPath = "/" + firstElement;
+				if (event == Event.START_ARRAY) {
+					event = parser.next();
+					if (event == Event.END_ARRAY) {
+						// An empty array is its own unit, as in the default mode
+						JFlat unit = new JFlat();
+						if (!removeNodes) {
+							unit.map.put(documentPath, "{array}");
+						}
+						unit.arrayPaths.add(documentPath);
+						unit.arrayLengths.add(0);
+						unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, separator, csvResult);
+						continue;
+					}
+
+					// One unit per element of the array
+					int index = 0;
+					while (event != Event.END_ARRAY) {
+						JFlat unit = new JFlat();
+						unit.removeNodes = removeNodes;
+						unit.flatten(parser, event, documentPath + "[" + index + "]", needed);
+						// The parent array, for the wildcard that follows an array expansion
+						unit.arrayPaths.add(documentPath);
+						unit.arrayLengths.add(0);
+						String unitEntry = entryPath + "[" + index + "]";
+						unit.appendUnitRows(unitEntry, unitEntry, pathElementArray, first, csvProperties, separator, csvResult);
+						index++;
+						event = parser.next();
+					}
+				} else {
+					// Any other value is a single unit
+					JFlat unit = new JFlat();
+					unit.removeNodes = removeNodes;
+					unit.flatten(parser, event, documentPath, needed);
+					unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, separator, csvResult);
+				}
+			}
+		} finally {
+			parser.close();
+		}
+
 		return csvResult;
+	}
+
+	/**
+	 * Append the rows of a unit
+	 *
+	 * @param unitEntry The entry of the unit, as built from the entry key
+	 * @param unitPath The path of the unit
+	 * @param pathElementArray The elements of the entry key path
+	 * @param first The index of the element that selected the unit
+	 * @param csvProperties The cleaned properties
+	 * @param separator The separator between fields
+	 * @param csvResult Where the rows are appended
+	 * @throws NotStreamableException when a property refers to a node above the unit
+	 */
+	private void appendUnitRows(
+		String unitEntry,
+		String unitPath,
+		String[] pathElementArray,
+		int first,
+		String[] csvProperties,
+		String separator,
+		StringBuilder csvResult
+	) throws NotStreamableException {
+		ArrayList<String> entries = new ArrayList<>();
+		entries.add(unitEntry);
+		entries = expandEntries(entries, pathElementArray, first + 1);
+		appendRows(entries, csvProperties, separator, unitPath, csvResult);
+	}
+
+	/**
+	 * Skip the value that starts with the specified event
+	 *
+	 * @param parser The parser
+	 * @param event The first event of the value
+	 */
+	private static void skipValue(JsonParser parser, Event event) {
+		if (event == Event.START_OBJECT) {
+			parser.skipObject();
+		} else if (event == Event.START_ARRAY) {
+			parser.skipArray();
+		}
+	}
+
+	/**
+	 * Node of the tree of the paths that a unit must keep, relative to the unit, case-insensitive, without array
+	 * indexes: a node of the unit is kept when its path is a prefix of a needed path
+	 */
+	private static final class PathNode {
+
+		private final Map<String, PathNode> children = new HashMap<>();
+	}
+
+	/**
+	 * Build the tree of the paths that the units must keep for the entry key and the properties
+	 *
+	 * @param pathElementArray The elements of the entry key path
+	 * @param start The index of the first element below the unit
+	 * @param csvProperties The cleaned properties
+	 * @return The root of the tree, or null when every node must be kept
+	 */
+	private static PathNode neededPaths(String[] pathElementArray, int start, String[] csvProperties) {
+		StringBuilder entry = new StringBuilder();
+		for (int e = start; e < pathElementArray.length; e++) {
+			String pathElement = pathElementArray[e];
+			if (pathElement.isEmpty()) {
+				continue;
+			}
+			// A wildcard expands the children of the map: keep everything
+			if ("*".equals(pathElement)) {
+				return null;
+			}
+			entry.append('/').append("\\*".equals(pathElement) ? "*" : pathElement);
+		}
+
+		PathNode root = new PathNode();
+		if (!addNeededPath(root, entry.toString())) {
+			return null;
+		}
+		for (String property : csvProperties) {
+			String path = property.equals(".") ? entry.toString() : entry + "/" + property;
+			// Same resolution of ../ as for the rows; a reference above the unit is detected by appendRows()
+			while (path.contains("/../")) {
+				int pos2 = path.indexOf("/../");
+				int pos1 = path.lastIndexOf("/", pos2 - 1);
+				if (pos1 < 0) {
+					return null;
+				}
+				path = path.substring(0, pos1) + path.substring(pos2 + 3);
+			}
+			if (!addNeededPath(root, path)) {
+				return null;
+			}
+		}
+		return root;
+	}
+
+	/**
+	 * Add a path, relative to the unit, to the tree of the needed paths
+	 *
+	 * @param root The root of the tree
+	 * @param path The path, starting with "/" (or empty for the unit itself)
+	 * @return false when the path cannot be compared safely (non-ASCII characters)
+	 */
+	private static boolean addNeededPath(PathNode root, String path) {
+		PathNode node = root;
+		String[] segments = path.split("/", -1);
+		// The first segment is the empty string before the leading "/"
+		for (int s = 1; s < segments.length; s++) {
+			String name = indexFree(segments[s]);
+			if (name == null) {
+				return false;
+			}
+			PathNode child = node.children.get(name);
+			if (child == null) {
+				child = new PathNode();
+				node.children.put(name, child);
+			}
+			node = child;
+		}
+		return true;
+	}
+
+	/**
+	 * Lower-cased path segment without its trailing array indexes
+	 *
+	 * @param segment The segment
+	 * @return The normalized segment, null when it contains non-ASCII characters
+	 */
+	private static String indexFree(String segment) {
+		for (int i = 0; i < segment.length(); i++) {
+			if (segment.charAt(i) > 127) {
+				return null;
+			}
+		}
+		String name = segment;
+		while (name.endsWith("]") && name.lastIndexOf('[') >= 0) {
+			String index = name.substring(name.lastIndexOf('[') + 1, name.length() - 1);
+			if (index.isEmpty() || !index.chars().allMatch(Character::isDigit)) {
+				break;
+			}
+			name = name.substring(0, name.lastIndexOf('['));
+		}
+		return name.toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * Flatten the value that starts with the specified event into the map of this unit, as navigateTree() does
+	 * for a value of a parsed document
+	 *
+	 * @param parser The parser, positioned on the first event of the value
+	 * @param event The first event of the value
+	 * @param path The path of the value
+	 * @param needed The node of the needed paths that matches the value, null to keep everything
+	 * @throws NotStreamableException when an object has a duplicate key
+	 */
+	private void flatten(JsonParser parser, Event event, String path, PathNode needed) throws NotStreamableException {
+		switch (event) {
+			case START_OBJECT:
+				if (!removeNodes) {
+					map.put(path, "{object}");
+				}
+				Set<String> keys = new HashSet<>();
+				Event child;
+				while ((child = parser.next()) != Event.END_OBJECT) {
+					String key = parser.getString();
+					// The default mode keeps the last value of a duplicate key
+					if (!keys.add(key)) {
+						throw new NotStreamableException();
+					}
+					child = parser.next();
+					PathNode childNeeded = null;
+					if (needed != null) {
+						// A key with a "/" or an index, or with non-ASCII characters, is kept entirely
+						String name = key.indexOf('/') >= 0 || key.indexOf('[') >= 0 || key.indexOf(']') >= 0
+							? null
+							: indexFree(key);
+						if (name != null) {
+							childNeeded = needed.children.get(name);
+							if (childNeeded == null) {
+								skipValue(parser, child);
+								continue;
+							}
+						}
+					}
+					flatten(parser, child, path + "/" + key, childNeeded);
+				}
+				break;
+			case START_ARRAY:
+				if (!removeNodes) {
+					map.put(path, "{array}");
+				}
+				int i = 0;
+				Event element;
+				while ((element = parser.next()) != Event.END_ARRAY) {
+					// The elements of an array have the path of the array, without index
+					flatten(parser, element, path + "[" + i + "]", needed);
+					i++;
+				}
+				arrayPaths.add(path);
+				arrayLengths.add(i);
+				break;
+			case VALUE_STRING:
+				map.put(path, parser.getString());
+				break;
+			case VALUE_NUMBER:
+				// Same JsonNumber, hence the same string, as in the parsed document
+				map.put(path, parser.getValue().toString());
+				break;
+			case VALUE_TRUE:
+				map.put(path, JsonValue.ValueType.TRUE.toString());
+				break;
+			case VALUE_FALSE:
+				map.put(path, JsonValue.ValueType.FALSE.toString());
+				break;
+			case VALUE_NULL:
+				map.put(path, JsonValue.ValueType.NULL.toString());
+				break;
+			default:
+				break;
+		}
 	}
 }
