@@ -50,10 +50,10 @@ import javax.json.stream.JsonParsingException;
 /**
  * Provides tools to convert a JSON-formated content to a flat structure, exported as a String.
  * <p>
- * In streaming mode (see {@link #JFlat(String, boolean)}), {@link #toCSV(String, String[], String)} reads the
+ * In event parsing mode (see {@link #JFlat(String, boolean)}), {@link #toCSV(String, String[], String)} reads the
  * document again and flattens the value of the first element of the entry key one array element at a time,
  * instead of keeping a map of the whole document: the memory used is bounded by the size of one element. The
- * result is the same as in the default mode; the documents that cannot be streamed exactly (see
+ * result is the same as in the default mode; the documents that the event parsing cannot process exactly (see
  * {@link #toCSV(String, String[], String)}) are processed as in the default mode.
  * @author Bertrand Martin
  *
@@ -66,9 +66,9 @@ public class JFlat {
 	private Reader inputReader;
 	private boolean parsed = false;
 
-	// Streaming mode: the source is kept to be read again, and the map of the whole document is only built when
-	// needed (getFlatTree(), or a document that cannot be streamed)
-	private boolean streaming;
+	// Event parsing mode: the source is kept to be read again, and the map of the whole document is only built when
+	// needed (getFlatTree(), or a document that the event parsing cannot process exactly)
+	private boolean eventParsing;
 	private String source;
 	private boolean removeNodes;
 	private boolean fullMap;
@@ -86,12 +86,13 @@ public class JFlat {
 	 * Create a new JFlat instance
 	 *
 	 * @param pJsonReader A Reader object (can be StringReader, FileReader, etc.), read entirely by parse() in
-	 *                    streaming mode
-	 * @param pStreaming Whether toCSV() streams the document instead of keeping a map of all its nodes
+	 *                    event parsing mode
+	 * @param pEventParsing Whether toCSV() reads the document by events, one element at a time, instead of keeping a
+	 *                      map of all its nodes
 	 */
-	public JFlat(Reader pJsonReader, boolean pStreaming) {
+	public JFlat(Reader pJsonReader, boolean pEventParsing) {
 		inputReader = pJsonReader;
-		streaming = pStreaming;
+		eventParsing = pEventParsing;
 	}
 
 	/**
@@ -103,15 +104,16 @@ public class JFlat {
 
 	/**
 	 * @param pJsonSource JSON source to be parsed
-	 * @param pStreaming Whether toCSV() streams the document instead of keeping a map of all its nodes
+	 * @param pEventParsing Whether toCSV() reads the document by events, one element at a time, instead of keeping a
+	 *                      map of all its nodes
 	 */
-	public JFlat(String pJsonSource, boolean pStreaming) {
-		this(pJsonSource == null ? new StringReader("") : new StringReader(pJsonSource), pStreaming);
+	public JFlat(String pJsonSource, boolean pEventParsing) {
+		this(pJsonSource == null ? new StringReader("") : new StringReader(pJsonSource), pEventParsing);
 		source = pJsonSource == null ? "" : pJsonSource;
 	}
 
 	/**
-	 * Container of the map of one unit of a streamed document
+	 * Container of the map of one unit of a document read by events
 	 */
 	private JFlat() {
 		this((Reader) null, false);
@@ -133,7 +135,7 @@ public class JFlat {
 	/**
 	 * Parse the JSON document
 	 * <p>
-	 * This call is mandatory before doing any other operation. In streaming mode, the document is only checked:
+	 * This call is mandatory before doing any other operation. In event parsing mode, the document is only checked:
 	 * nothing is kept but the source.
 	 *
 	 * @param removeNodes Whether to remove "artificial" nodes without values ({object} and {array})
@@ -143,17 +145,17 @@ public class JFlat {
 	 * @throws IllegalStateException when... actually never in a single-thread context
 	 */
 	public void parse(boolean removeNodes) throws ParseException, IOException, IllegalStateException {
-		if (streaming) {
+		if (eventParsing) {
 			this.removeNodes = removeNodes;
 			if (source == null) {
 				source = readAll(inputReader);
 			}
-			if (isStreamable(source)) {
+			if (isEventParsable(source)) {
 				parsed = true;
 				return;
 			}
 
-			// Not a document the streaming mode can read: parse it as usual, which throws the same exceptions
+			// Not a document the event parsing mode can read: parse it as usual, which throws the same exceptions
 			inputReader = new StringReader(source);
 			fullMap = true;
 		}
@@ -214,13 +216,13 @@ public class JFlat {
 	}
 
 	/**
-	 * Check, with the streaming parser, that the document is an object or an array that the default mode can read
+	 * Check, with the event parser, that the document is an object or an array that the default mode can read
 	 * (what follows the root value is ignored, as by the default mode)
 	 *
 	 * @param json The JSON document
-	 * @return true when the document can be streamed
+	 * @return true when the document can be read by events
 	 */
-	private static boolean isStreamable(String json) {
+	private static boolean isEventParsable(String json) {
 		JsonParser parser = Json.createParser(new StringReader(json));
 		try {
 			Event event = parser.next();
@@ -248,10 +250,10 @@ public class JFlat {
 	}
 
 	/**
-	 * Build the map of the whole document of a streaming instance
+	 * Build the map of the whole document of an event parsing instance
 	 */
 	private void buildFullMap() {
-		streaming = false;
+		eventParsing = false;
 		inputReader = new StringReader(source);
 		try {
 			parse(removeNodes);
@@ -365,7 +367,7 @@ public class JFlat {
 		}
 
 		// The flat tree is the map of the whole document
-		if (streaming && !fullMap) {
+		if (eventParsing && !fullMap) {
 			buildFullMap();
 		}
 
@@ -415,10 +417,11 @@ public class JFlat {
 	/**
 	 * Translates (flattens) a JSON structure into a CSV string
 	 * <p>
-	 * In streaming mode, the document is read again and the value of the first element of the entry key
+	 * In event parsing mode, the document is read again and the value of the first element of the entry key
 	 * (<code>items</code> in <code>/items/status/conditions</code>) is flattened one array element at a time (or
 	 * as a single unit when it is not a non-empty array), skipping the nodes that neither the entry key nor the
-	 * properties can reach. The document is processed as in the default mode when it cannot be streamed exactly:
+	 * properties can reach. The document is processed as in the default mode when the event parsing cannot give the
+	 * exact result:
 	 * root array, entry key <code>/</code>, first element of the entry key that is a wildcard or contains an index,
 	 * first element of the entry key present more than once in the root object (whatever the case), root key that
 	 * contains <code>/</code> or <code>[</code>, property that refers to a node above the unit
@@ -468,11 +471,11 @@ public class JFlat {
 			separator = ";";
 		}
 
-		// Streaming mode: process the document one unit at a time, unless it cannot be streamed exactly
-		if (streaming && !fullMap) {
+		// Event parsing mode: process the document one unit at a time, unless the event parsing cannot give the exact result
+		if (eventParsing && !fullMap) {
 			try {
-				return streamToCSV(csvEntryKey, csvProperties, separator);
-			} catch (NotStreamableException e) {
+				return eventParsingToCSV(csvEntryKey, csvProperties, separator);
+			} catch (DefaultModeRequiredException e) {
 				buildFullMap();
 			}
 		}
@@ -535,8 +538,8 @@ public class JFlat {
 		// And now, build the CSV
 		try {
 			appendRows(entries, csvProperties, separator, null, csvResult);
-		} catch (NotStreamableException e) {
-			// Only raised for a unit of a streamed document
+		} catch (DefaultModeRequiredException e) {
+			// Only raised for a unit of a document read by events
 			throw new IllegalStateException(e);
 		}
 
@@ -713,9 +716,9 @@ public class JFlat {
 	 * @param entries The entries
 	 * @param csvProperties The properties of each entry
 	 * @param separator The separator between fields
-	 * @param unitPath The path of the streamed unit that holds the entries, null for the map of the whole document
+	 * @param unitPath The path of the unit read by events that holds the entries, null for the map of the whole document
 	 * @param csvResult Where the rows are appended
-	 * @throws NotStreamableException when a property refers to a node above the unit
+	 * @throws DefaultModeRequiredException when a property refers to a node above the unit
 	 */
 	private void appendRows(
 		List<String> entries,
@@ -723,7 +726,7 @@ public class JFlat {
 		String separator,
 		String unitPath,
 		StringBuilder csvResult
-	) throws NotStreamableException {
+	) throws DefaultModeRequiredException {
 		// And now, build the CSV
 		for (String entry : entries) {
 			// Check that the entry actually exists (in case, the user has put an invalid entryKey)
@@ -755,9 +758,9 @@ public class JFlat {
 				while (path.contains("/../")) {
 					int pos2 = path.indexOf("/../");
 					int pos1 = path.lastIndexOf("/", pos2 - 1);
-					// A streamed unit only holds its own nodes
+					// A unit read by events only holds its own nodes
 					if (unitPath != null && pos1 < unitPath.length()) {
-						throw new NotStreamableException();
+						throw new DefaultModeRequiredException();
 					}
 					path = path.substring(0, pos1) + path.substring(pos2 + 3);
 				}
@@ -778,28 +781,28 @@ public class JFlat {
 	}
 
 	/**
-	 * Raised when a document cannot be streamed exactly
+	 * Raised when a document must be processed as in the default mode
 	 */
-	private static final class NotStreamableException extends Exception {
+	private static final class DefaultModeRequiredException extends Exception {
 
 		private static final long serialVersionUID = 1L;
 
-		NotStreamableException() {
+		DefaultModeRequiredException() {
 			super(null, null, false, false);
 		}
 	}
 
 	/**
-	 * Translates the source into a CSV string in streaming mode
+	 * Translates the source into a CSV string in event parsing mode
 	 *
 	 * @param csvEntryKey The entry key (as specified)
 	 * @param csvProperties The cleaned properties
 	 * @param separator The separator between fields
 	 * @return The CSV string
-	 * @throws NotStreamableException when the document cannot be streamed exactly
+	 * @throws DefaultModeRequiredException when the event parsing cannot give the exact result
 	 */
-	private StringBuilder streamToCSV(String csvEntryKey, String[] csvProperties, String separator)
-		throws NotStreamableException {
+	private StringBuilder eventParsingToCSV(String csvEntryKey, String[] csvProperties, String separator)
+		throws DefaultModeRequiredException {
 		// Same entry key as the default mode
 		String entryKey = csvEntryKey.isEmpty() ? "/" : csvEntryKey;
 		if (!entryKey.startsWith("/")) {
@@ -807,17 +810,17 @@ public class JFlat {
 		}
 		String[] pathElementArray = entryKey.split("/");
 
-		// The first element selects the value of the root object that is streamed
+		// The first element selects the value of the root object that is read by events
 		int first = 0;
 		while (first < pathElementArray.length && pathElementArray[first].isEmpty()) {
 			first++;
 		}
 		if (first == pathElementArray.length) {
-			throw new NotStreamableException();
+			throw new DefaultModeRequiredException();
 		}
 		String firstElement = pathElementArray[first];
 		if ("*".equals(firstElement) || firstElement.indexOf('[') >= 0 || firstElement.indexOf(']') >= 0) {
-			throw new NotStreamableException();
+			throw new DefaultModeRequiredException();
 		}
 		if ("\\*".equals(firstElement)) {
 			firstElement = "*";
@@ -830,7 +833,7 @@ public class JFlat {
 		JsonParser parser = Json.createParser(new StringReader(source));
 		try {
 			if (parser.next() != Event.START_OBJECT) {
-				throw new NotStreamableException();
+				throw new DefaultModeRequiredException();
 			}
 
 			boolean found = false;
@@ -838,7 +841,7 @@ public class JFlat {
 			while ((event = parser.next()) != Event.END_OBJECT) {
 				String key = parser.getString();
 				if (key.indexOf('/') >= 0 || key.indexOf('[') >= 0) {
-					throw new NotStreamableException();
+					throw new DefaultModeRequiredException();
 				}
 				event = parser.next();
 				if (!key.equalsIgnoreCase(firstElement)) {
@@ -848,7 +851,7 @@ public class JFlat {
 
 				// The default mode merges the keys that differ only by case and keeps the last duplicate
 				if (found) {
-					throw new NotStreamableException();
+					throw new DefaultModeRequiredException();
 				}
 				found = true;
 
@@ -907,7 +910,7 @@ public class JFlat {
 	 * @param csvProperties The cleaned properties
 	 * @param separator The separator between fields
 	 * @param csvResult Where the rows are appended
-	 * @throws NotStreamableException when a property refers to a node above the unit
+	 * @throws DefaultModeRequiredException when a property refers to a node above the unit
 	 */
 	private void appendUnitRows(
 		String unitEntry,
@@ -917,7 +920,7 @@ public class JFlat {
 		String[] csvProperties,
 		String separator,
 		StringBuilder csvResult
-	) throws NotStreamableException {
+	) throws DefaultModeRequiredException {
 		ArrayList<String> entries = new ArrayList<>();
 		entries.add(unitEntry);
 		entries = expandEntries(entries, pathElementArray, first + 1);
@@ -1048,9 +1051,10 @@ public class JFlat {
 	 * @param event The first event of the value
 	 * @param path The path of the value
 	 * @param needed The node of the needed paths that matches the value, null to keep everything
-	 * @throws NotStreamableException when an object has a duplicate key
+	 * @throws DefaultModeRequiredException when an object has a duplicate key
 	 */
-	private void flatten(JsonParser parser, Event event, String path, PathNode needed) throws NotStreamableException {
+	private void flatten(JsonParser parser, Event event, String path, PathNode needed)
+		throws DefaultModeRequiredException {
 		switch (event) {
 			case START_OBJECT:
 				if (!removeNodes) {
@@ -1062,7 +1066,7 @@ public class JFlat {
 					String key = parser.getString();
 					// The default mode keeps the last value of a duplicate key
 					if (!keys.add(key)) {
-						throw new NotStreamableException();
+						throw new DefaultModeRequiredException();
 					}
 					child = parser.next();
 					PathNode childNeeded = null;

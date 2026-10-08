@@ -20,39 +20,39 @@ public class JFlatTest {
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void flatMap(boolean streaming) throws IllegalStateException, ParseException, IOException {
+	void flatMap(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
 		JFlat jFlat;
 
-		jFlat = new JFlat(getResourceAsString("/simple.json"), streaming);
+		jFlat = new JFlat(getResourceAsString("/simple.json"), eventParsing);
 		jFlat.parse();
 		assertEquals(getResourceAsString("/simple-flatMap.txt"), jFlat.getFlatTree().toString());
 
-		jFlat = new JFlat(getResourceAsString("/simple.json"), streaming);
+		jFlat = new JFlat(getResourceAsString("/simple.json"), eventParsing);
 		jFlat.parse(true);
 		assertEquals(getResourceAsString("/simple-flatMap-removeNodes.txt"), jFlat.getFlatTree().toString());
 
-		jFlat = new JFlat(getResourceAsString("/complex.json"), streaming);
+		jFlat = new JFlat(getResourceAsString("/complex.json"), eventParsing);
 		jFlat.parse();
 		assertEquals(getResourceAsString("/complex-flatMap.txt"), jFlat.getFlatTree().toString());
 
-		jFlat = new JFlat(getResourceAsString("/large.json"), streaming);
+		jFlat = new JFlat(getResourceAsString("/large.json"), eventParsing);
 		jFlat.parse();
 		assertEquals(getResourceAsString("/large-flatMap.txt"), jFlat.getFlatTree().toString());
 
-		jFlat = new JFlat(getResourceAsString("/object-keys.json"), streaming);
+		jFlat = new JFlat(getResourceAsString("/object-keys.json"), eventParsing);
 		jFlat.parse();
 		assertEquals(getResourceAsString("/object-keys-flatMap.txt"), jFlat.getFlatTree().toString());
 
-		jFlat = new JFlat(new StringReader(getResourceAsString("/object-keys.json")), streaming);
+		jFlat = new JFlat(new StringReader(getResourceAsString("/object-keys.json")), eventParsing);
 		jFlat.parse();
 		assertEquals(getResourceAsString("/object-keys-flatMap.txt"), jFlat.getFlatTree().toString());
 	}
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void edgeCases(boolean streaming) throws IllegalStateException, ParseException, IOException {
+	void edgeCases(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
 		// parse() not done
-		JFlat simple = new JFlat(getResourceAsString("/simple.json"), streaming);
+		JFlat simple = new JFlat(getResourceAsString("/simple.json"), eventParsing);
 		assertThrows(
 			IllegalStateException.class,
 			() -> simple.getFlatTree(),
@@ -65,7 +65,7 @@ public class JFlatTest {
 		);
 
 		// empty JSON
-		JFlat empty = new JFlat("", streaming);
+		JFlat empty = new JFlat("", eventParsing);
 		assertThrows(
 			ParseException.class,
 			() -> empty.parse(),
@@ -73,7 +73,7 @@ public class JFlatTest {
 		);
 
 		// syntax error
-		JFlat wrong = new JFlat("{ this: is a wrong JSON document", streaming);
+		JFlat wrong = new JFlat("{ this: is a wrong JSON document", eventParsing);
 		assertThrows(
 			ParseException.class,
 			() -> wrong.parse(),
@@ -93,15 +93,15 @@ public class JFlatTest {
 				closed[0] = true;
 			}
 		};
-		JFlat broken = new JFlat(failing, streaming);
+		JFlat broken = new JFlat(failing, eventParsing);
 		assertThrows(IOException.class, () -> broken.parse(), "A reader that fails should trigger an IOException");
 		assertTrue(closed[0], "The reader should be closed");
 	}
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void csv(boolean streaming) throws IllegalStateException, ParseException, IOException {
-		JFlat simple = new JFlat(getResourceAsString("/simple.json"), streaming);
+	void csv(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		JFlat simple = new JFlat(getResourceAsString("/simple.json"), eventParsing);
 		simple.parse();
 		assertEquals("[0];\n[1];\n", simple.toCSV("/", null, null).toString());
 		assertEquals("[0]/attribute1;\n[1]/attribute1;\n", simple.toCSV("/attribute1", null, null).toString());
@@ -123,8 +123,8 @@ public class JFlatTest {
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void csvProperties(boolean streaming) throws IllegalStateException, ParseException, IOException {
-		JFlat simple = new JFlat(getResourceAsString("/simple.json"), streaming);
+	void csvProperties(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		JFlat simple = new JFlat(getResourceAsString("/simple.json"), eventParsing);
 		simple.parse();
 		assertEquals("[0];{object};\n[1];{object};\n", simple.toCSV("/", new String[] { "." }, null).toString());
 		assertEquals("[0];{array};\n[1];{array};\n", simple.toCSV("/", new String[] { "arrayA" }, null).toString());
@@ -150,8 +150,8 @@ public class JFlatTest {
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void csvWildcard(boolean streaming) throws IllegalStateException, ParseException, IOException {
-		JFlat nodeDrives = new JFlat(getResourceAsString("/object-keys.json"), streaming);
+	void csvWildcard(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		JFlat nodeDrives = new JFlat(getResourceAsString("/object-keys.json"), eventParsing);
 		nodeDrives.parse();
 
 		// Wildcard to list all drive entries
@@ -186,8 +186,8 @@ public class JFlatTest {
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void csvWildcardEscape(boolean streaming) throws IllegalStateException, ParseException, IOException {
-		JFlat jFlat = new JFlat(getResourceAsString("/wildcard-key.json"), streaming);
+	void csvWildcardEscape(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		JFlat jFlat = new JFlat(getResourceAsString("/wildcard-key.json"), eventParsing);
 		jFlat.parse();
 
 		// Wildcard "*" expands all children of "items"
@@ -202,7 +202,7 @@ public class JFlatTest {
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
-	void csvList(boolean streaming) throws IllegalStateException, ParseException, IOException {
+	void csvList(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
 		String list =
 			"{\"kind\":\"PodList\",\"items\":[" +
 			"{\"metadata\":{\"name\":\"a\",\"labels\":{\"app\":\"x\"}},\"status\":{\"conditions\":[" +
@@ -210,7 +210,7 @@ public class JFlatTest {
 			"{\"metadata\":{\"name\":\"b\"},\"status\":{\"conditions\":[]}}," +
 			"{\"metadata\":{\"name\":\"c\"},\"status\":{\"phase\":null,\"restarts\":1.50e1}}" +
 			"]}";
-		JFlat jFlat = new JFlat(list, streaming);
+		JFlat jFlat = new JFlat(list, eventParsing);
 		jFlat.parse();
 
 		// One row per element, in the order of the array
@@ -246,18 +246,18 @@ public class JFlatTest {
 	}
 
 	/**
-	 * The documents that the streaming mode must process as the default mode does
+	 * The documents that the event parsing mode must process as the default mode does
 	 */
 	@Test
-	void streamingEdgeCases() {
+	void eventParsingEdgeCases() {
 		// Key "" in an element
-		assertStreamingMatchesDefault("{\"items\":[{\"\":{\"name\":\"e\"},\"name\":\"n\"}]}", "/items", "spec/..//name");
+		assertEventParsingMatchesDefault("{\"items\":[{\"\":{\"name\":\"e\"},\"name\":\"n\"}]}", "/items", "spec/..//name");
 		// Root key that contains "/" or "[", root key present twice
-		assertStreamingMatchesDefault("{\"items\":{\"x\":{\"a\":1}},\"items/x\":{\"a\":2}}", "/items/x", "a");
-		assertStreamingMatchesDefault("{\"items\":[{\"a\":1}],\"items[0]\":{\"a\":2}}", "/items", "a");
-		assertStreamingMatchesDefault("{\"items\":[{\"a\":1}],\"Items\":[{\"a\":2}]}", "/items", "a");
+		assertEventParsingMatchesDefault("{\"items\":{\"x\":{\"a\":1}},\"items/x\":{\"a\":2}}", "/items/x", "a");
+		assertEventParsingMatchesDefault("{\"items\":[{\"a\":1}],\"items[0]\":{\"a\":2}}", "/items", "a");
+		assertEventParsingMatchesDefault("{\"items\":[{\"a\":1}],\"Items\":[{\"a\":2}]}", "/items", "a");
 		// Duplicate key in an element
-		assertStreamingMatchesDefault(
+		assertEventParsingMatchesDefault(
 			"{\"items\":[{\"a\":{\"b\":1},\"c\":3,\"a\":{\"d\":2}}]}",
 			"/items",
 			"a/b",
@@ -265,8 +265,8 @@ public class JFlatTest {
 			"c"
 		);
 		// Properties above the element and within the element
-		assertStreamingMatchesDefault("{\"kind\":\"K\",\"items\":[{\"a\":1}]}", "/items", "a", "../kind");
-		assertStreamingMatchesDefault(
+		assertEventParsingMatchesDefault("{\"kind\":\"K\",\"items\":[{\"a\":1}]}", "/items", "a", "../kind");
+		assertEventParsingMatchesDefault(
 			"{\"items\":[{\"name\":\"a\",\"spec\":{\"c\":[{\"x\":1},{\"x\":2}]}}]}",
 			"/items/spec/c",
 			"x",
@@ -274,64 +274,70 @@ public class JFlatTest {
 			"../../../../x"
 		);
 		// Wildcard below the value, below an element (where the default mode passes the entry through)
-		assertStreamingMatchesDefault(
+		assertEventParsingMatchesDefault(
 			"{\"items\":{\"spec\":{\"x\":{\"name\":\"a\"},\"y\":{\"name\":\"b\"}}}}",
 			"/items/spec/*",
 			"name"
 		);
-		assertStreamingMatchesDefault(
+		assertEventParsingMatchesDefault(
 			"{\"items\":[{\"spec\":{\"x\":{\"name\":\"a\"},\"y\":{\"name\":\"b\"}}},[1,[2]]]}",
 			"/items/spec/*",
 			"name"
 		);
-		assertStreamingMatchesDefault("{\"items\":[[1,2],[3],{\"a\":[4]}]}", "/items/*", ".");
-		assertStreamingMatchesDefault("{\"items\":[[1,2],[3],{\"a\":[4]}]}", "/items/*/a", ".");
+		assertEventParsingMatchesDefault("{\"items\":[[1,2],[3],{\"a\":[4]}]}", "/items/*", ".");
+		assertEventParsingMatchesDefault("{\"items\":[[1,2],[3],{\"a\":[4]}]}", "/items/*/a", ".");
 		// Empty list, scalar, null, escaped wildcard
-		assertStreamingMatchesDefault("{\"items\":[]}", "/items", ".");
-		assertStreamingMatchesDefault("{\"items\":[]}", "/items/*", ".");
-		assertStreamingMatchesDefault("{\"items\":\"x\"}", "/items", ".");
-		assertStreamingMatchesDefault("{\"items\":null}", "items", ".");
-		assertStreamingMatchesDefault("{\"*\":[{\"a\":1}],\"b\":2}", "/\\*", "a", "../b");
+		assertEventParsingMatchesDefault("{\"items\":[]}", "/items", ".");
+		assertEventParsingMatchesDefault("{\"items\":[]}", "/items/*", ".");
+		assertEventParsingMatchesDefault("{\"items\":\"x\"}", "/items", ".");
+		assertEventParsingMatchesDefault("{\"items\":null}", "items", ".");
+		assertEventParsingMatchesDefault("{\"*\":[{\"a\":1}],\"b\":2}", "/\\*", "a", "../b");
 		// Keys equal whatever the case, non-ASCII keys
-		assertStreamingMatchesDefault(
+		assertEventParsingMatchesDefault(
 			"{\"items\":[{\"Name\":\"a\",\"name\":\"b\",\"K\":1,\"k\":2}]}",
 			"/ITEMS",
 			"NAME",
 			"k"
 		);
-		assertStreamingMatchesDefault("{\"items\":[{\"été\":{\"a\":1},\"b\":2}]}", "/items", "ÉTÉ/a", "b");
+		assertEventParsingMatchesDefault("{\"items\":[{\"été\":{\"a\":1},\"b\":2}]}", "/items", "ÉTÉ/a", "b");
 		// Numbers, trailing content, number out of range
-		assertStreamingMatchesDefault("{\"items\":[{\"a\":1.50e1,\"b\":-0,\"c\":1E+2}]} trailing", "/items", "a", "b", "c");
-		assertStreamingMatchesDefault("{\"items\":[{\"a\":1}],\"b\":1e99999999999}", "/items", "a");
+		assertEventParsingMatchesDefault(
+			"{\"items\":[{\"a\":1.50e1,\"b\":-0,\"c\":1E+2}]} trailing",
+			"/items",
+			"a",
+			"b",
+			"c"
+		);
+		assertEventParsingMatchesDefault("{\"items\":[{\"a\":1}],\"b\":1e99999999999}", "/items", "a");
 	}
 
 	/**
-	 * Assert that the streaming mode gives the same result as the default mode, with and without the nodes
+	 * Assert that the event parsing mode gives the same result as the default mode, with and without the nodes
 	 * without value
 	 *
 	 * @param json The document
 	 * @param entryKey The entry key
 	 * @param properties The properties
 	 */
-	private static void assertStreamingMatchesDefault(String json, String entryKey, String... properties) {
-		boolean[] streamed = new boolean[1];
+	private static void assertEventParsingMatchesDefault(String json, String entryKey, String... properties) {
+		boolean[] byEvents = new boolean[1];
 		for (boolean removeNodes : new boolean[] { false, true }) {
 			assertEquals(
-				run(new JFlat(json), removeNodes, entryKey, properties.clone(), ";", streamed),
-				run(new JFlat(json, true), removeNodes, entryKey, properties.clone(), ";", streamed),
+				run(new JFlat(json), removeNodes, entryKey, properties.clone(), ";", byEvents),
+				run(new JFlat(json, true), removeNodes, entryKey, properties.clone(), ";", byEvents),
 				json
 			);
 		}
 	}
 
 	/**
-	 * The streaming mode gives the same result as the default mode, or throws the same exception, on generated
+	 * The event parsing mode gives the same result as the default mode, or throws the same exception, on generated
 	 * documents, entry keys and properties
 	 */
 	@Test
-	void streamingMatchesDefault() {
+	void eventParsingMatchesDefault() {
 		Random random = new Random(20261008L);
-		int streamed = 0;
+		int byEvents = 0;
 		int calls = 0;
 		for (int d = 0; d < 4000; d++) {
 			String json = randomDocument(random);
@@ -341,9 +347,9 @@ public class JFlatTest {
 				String separator = SEPARATORS[random.nextInt(SEPARATORS.length)];
 				boolean removeNodes = random.nextBoolean();
 
-				boolean[] streamedCall = new boolean[1];
-				String expected = run(new JFlat(json), removeNodes, entryKey, properties.clone(), separator, streamedCall);
-				String actual = run(new JFlat(json, true), removeNodes, entryKey, properties.clone(), separator, streamedCall);
+				boolean[] byEventsCall = new boolean[1];
+				String expected = run(new JFlat(json), removeNodes, entryKey, properties.clone(), separator, byEventsCall);
+				String actual = run(new JFlat(json, true), removeNodes, entryKey, properties.clone(), separator, byEventsCall);
 				assertEquals(
 					expected,
 					actual,
@@ -351,20 +357,20 @@ public class JFlatTest {
 				);
 
 				calls++;
-				if (streamedCall[0]) {
-					streamed++;
+				if (byEventsCall[0]) {
+					byEvents++;
 				}
 			}
 		}
 
-		// Most calls must be streamed, not processed as in the default mode
-		assertTrue(streamed > calls / 2, streamed + " streamed calls out of " + calls);
+		// Most calls must be read by events, not processed as in the default mode
+		assertTrue(byEvents > calls / 2, byEvents + " calls read by events out of " + calls);
 	}
 
 	/**
 	 * Parse and convert a document twice, then dump the flat tree
 	 *
-	 * @param streamed Set to whether the conversions were streamed (without the map of the whole document)
+	 * @param byEvents Set to whether the conversions were read by events (without the map of the whole document)
 	 * @return The CSV and the flat tree, or the exception
 	 */
 	private static String run(
@@ -373,17 +379,17 @@ public class JFlatTest {
 		String entryKey,
 		String[] properties,
 		String separator,
-		boolean[] streamed
+		boolean[] byEvents
 	) {
 		StringBuilder result = new StringBuilder();
-		streamed[0] = false;
+		byEvents[0] = false;
 		try {
 			jFlat.parse(removeNodes);
 			result.append(jFlat.toCSV(entryKey, properties, separator));
 			result.append(jFlat.toCSV(entryKey, properties, separator));
 			Field fullMap = JFlat.class.getDeclaredField("fullMap");
 			fullMap.setAccessible(true);
-			streamed[0] = !(Boolean) fullMap.get(jFlat);
+			byEvents[0] = !(Boolean) fullMap.get(jFlat);
 			result.append("--\n").append(jFlat.getFlatTree());
 		} catch (Exception e) {
 			result.append(e.getClass().getName()).append(": ").append(e.getMessage());

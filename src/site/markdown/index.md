@@ -144,9 +144,9 @@ If you have a JSON property literally named `*`, escape it with a backslash:
 jFlat.toCSV("/members/\\*", new String[] { "name" }, ";");
 ```
 
-# Streaming Mode
+# Event Parsing Mode
 
-By default, `parse()` keeps a map of every node of the document, which uses about 20 times the size of the document. For large lists (a REST API that returns thousands of items, for example), create the instance in streaming mode:
+By default, `parse()` keeps a map of every node of the document, which uses about 20 times the size of the document. For large lists (a REST API that returns thousands of items, for example), create the instance in event parsing mode:
 
 ```Java
 JFlat jFlat = new JFlat(json, true);
@@ -154,9 +154,11 @@ jFlat.parse();
 System.out.print(jFlat.toCSV("/items/status/conditions", new String[] { "type", "../../metadata/name" }, ";"));
 ```
 
-In streaming mode, `parse()` only checks the document, and `toCSV()` reads it again and flattens the value of the first element of the entry key (`items` above) one array element at a time, skipping the nodes that neither the entry key nor the properties can reach. The memory used is the document plus one element, and the result is the same as in the default mode, rows in the same order.
+In event parsing mode, the document is read with the event parser of `javax.json.stream` instead of being loaded as a tree. `parse()` only checks the document. `toCSV()` reads it again and flattens the value of the first element of the entry key (`items` above) one array element at a time, skipping the nodes that neither the entry key nor the properties can reach. The memory used is the document plus one element, and the result is the same as in the default mode, rows in the same order.
 
-The documents that cannot be streamed exactly are processed as in the default mode, with the same memory usage:
+The document itself is still kept in memory as a whole (a `Reader` is read entirely by `parse()`), and the CSV is still returned as a whole: the event parsing only changes how the document is read.
+
+The documents that this mode cannot process exactly are processed as in the default mode, with the same memory usage:
 
 * the document is an array, the entry key is `/`, or its first element is `*` or contains an index (`[0]`)
 * the first element of the entry key is present more than once in the root object (whatever the case), or a root key contains `/` or `[`
