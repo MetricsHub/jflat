@@ -53,11 +53,10 @@ import javax.json.stream.JsonParsingException;
  * Provides tools to convert a JSON-formated content to a flat structure, exported as a String.
  * <p>
  * In event parsing mode (see {@link #JFlat(String, boolean)}), {@link #toTable(String, String[])} and
- * {@link #toCSV(String, String[], String)} read the
- * document again and flatten the value of the first element of the entry key one array element at a time,
- * instead of keeping a map of the whole document: the memory used is bounded by the size of one element. The
- * result is the same as in the default mode; the documents that the event parsing cannot process exactly (see
- * {@link #toTable(String, String[])}) are processed as in the default mode.
+ * {@link #toCSV(String, String[], String)} read the document again and flatten the value of the first element of
+ * the entry key one array element at a time, instead of keeping a map of the whole document: the memory used is
+ * bounded by the size of one element. The result is the same as in the default mode; the documents that the event
+ * parsing cannot process exactly (see {@link #toTable(String, String[])}) are processed as in the default mode.
  * @author Bertrand Martin
  *
  */
@@ -425,7 +424,9 @@ public class JFlat {
 	 * <li>the root value is <code>/</code></li>
 	 * <li>a member of an object is the path of the object, <code>/</code> and the key: <code>/kind</code>,
 	 * <code>/metadata/name</code> (the keys are not escaped: a key that contains <code>/</code> or <code>[</code>
-	 * gives a path that looks like a deeper one, an empty key gives <code>//</code>)</li>
+	 * gives a path that looks like a deeper one, and an empty key gives the path of the object followed by
+	 * <code>/</code>: <code>/k/</code> in <code>/k</code>, and <code>/</code> at the root, the path of the root
+	 * itself, so that its children are <code>//x</code>)</li>
 	 * <li>an element of an array is the path of the array and its index: <code>/items[0]</code>,
 	 * <code>/items[0]/name</code>, <code>/matrix[1][0]</code>; the elements of a root array have no leading
 	 * <code>/</code>: <code>[0]</code>, <code>[0]/id</code></li>
@@ -446,9 +447,9 @@ public class JFlat {
 	 * document: <code>/items[10]</code> comes before <code>/items[2]</code>, and <code>/a/b</code> before
 	 * <code>/a[0]</code>.
 	 * <p>
-	 * In event parsing mode (see {@link #JFlat(String, boolean)}), <code>parse()</code> only checks the document:
-	 * the first call builds the map of the whole document, as {@link #getFlatTree()} does, with the same content and
-	 * memory usage as in the default mode.
+	 * In event parsing mode (see {@link #JFlat(String, boolean)}), <code>parse()</code> builds no map unless the
+	 * event parsing cannot read the document: the first call builds the map of the whole document, as
+	 * {@link #getFlatTree()} does, with the same content and memory usage as in the default mode.
 	 *
 	 * @return An unmodifiable view of the flat map
 	 * @throws IllegalStateException when the document has not been parsed first (call parse() first!)
@@ -480,6 +481,7 @@ public class JFlat {
 	 * @return The CSV string
 	 * @throws IllegalArgumentException when any of the specified arguments is null (or an entry in the csvProperties array is null)
 	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
+	 * @throws StringIndexOutOfBoundsException when a property goes above the root
 	 */
 	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator)
 		throws IllegalStateException, IllegalArgumentException {
@@ -518,7 +520,9 @@ public class JFlat {
 	 * included), or an empty string when there is no such node. <code>.</code> is the entry itself,
 	 * <code>../</code> goes to the parent of the entry (<code>../../metadata/name</code>), and the leading
 	 * <code>./</code> and <code>/</code> of a property are ignored (they are removed from the specified array itself).
-	 * The values are those of {@link #getFlatMap()}.
+	 * The values are those of {@link #getFlatMap()}. A property that goes above the root (<code>../../kind</code>
+	 * from <code>/items</code>, <code>../kind</code> from <code>/</code>) throws a {@link StringIndexOutOfBoundsException},
+	 * as {@link #toCSV(String, String[], String)} always did.
 	 * <p>
 	 * In event parsing mode, the document is read again and the value of the first element of the entry key
 	 * (<code>items</code> in <code>/items/status/conditions</code>) is flattened one array element at a time (or
@@ -535,6 +539,7 @@ public class JFlat {
 	 * @return A new list of the rows, each a new list of the path of the entry and the value of each property
 	 * @throws IllegalArgumentException when the entry key or a property is null
 	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
+	 * @throws StringIndexOutOfBoundsException when a property goes above the root
 	 */
 	public List<List<String>> toTable(String entryKey, String[] properties)
 		throws IllegalStateException, IllegalArgumentException {
