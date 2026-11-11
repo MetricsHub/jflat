@@ -1,6 +1,7 @@
 package org.metricshub.jflat;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,7 +11,13 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -616,6 +623,340 @@ public class JFlatTest {
 			properties[i] = PROPERTIES[random.nextInt(PROPERTIES.length)];
 		}
 		return properties;
+	}
+
+	/**
+	 * toCSV() writes exactly what it wrote before it was built on toTable(): src/test/resources/toCSV-golden.txt was
+	 * captured with {@link #csvGoldenLines()} from toCSV() of version 1.2.01
+	 */
+	@Test
+	void csvGolden() {
+		assertIterableEquals(Arrays.asList(getResourceAsString("/toCSV-golden.txt").split("\n")), csvGoldenLines());
+	}
+
+	private static final String[] GOLDEN_KEYS = { "/", "", "/*", "/nonexistent" };
+
+	private static final String[][] GOLDEN_PROPERTIES = {
+		null,
+		{},
+		{ "." },
+		{ "nonexistent" },
+		{ "./x", "/x", "//x", "", ".." }
+	};
+
+	private static final String[] GOLDEN_SEPARATORS = { null, ";", ",", " ", "", "||", "\n", "\t" };
+
+	/**
+	 * The toCSV() outputs of the golden test: the test documents, edge cases and random documents, with each entry
+	 * key, properties, separator, parsing mode and removeNodes
+	 *
+	 * @return One line per call, with the call and its output (or its SHA-256 when it is long), or its exception
+	 */
+	static List<String> csvGoldenLines() {
+		List<String> lines = new ArrayList<>();
+		goldenGroup(
+			lines,
+			"simple",
+			getResourceAsString("/simple.json"),
+			new String[] {
+				"/attribute1",
+				"/*/attribute1",
+				"/arrayA",
+				"/arrayA/*",
+				"/arrayB",
+				"/arrayB/id",
+				"/arrayB/*/id",
+				"/arrayB[*]",
+				"[0]/arrayB"
+			},
+			new String[][] { { "id", "value" }, { "id", "../attribute1" }, { "../lastAttribute", "../../x" }, { "arrayA" } }
+		);
+		goldenGroup(
+			lines,
+			"complex",
+			getResourceAsString("/complex.json"),
+			new String[] { "/children", "/children/costumes", "/children/*/costumes" },
+			new String[][] { { "objName", "scale", "isDraggable" }, { "costumeName", "baseLayerID", "../objName" } }
+		);
+		goldenGroup(
+			lines,
+			"large",
+			getResourceAsString("/large.json"),
+			new String[] { "/groupsState", "/groupsState/groupCopiesState", "/clustersPhoenixClustersState" },
+			new String[][] {
+				{ "groupUID/id", "enabled" },
+				{ "enabled", "journalState", "copyUID/globalCopyUID/clusterUID/id", "../groupUID/id", "../../x" },
+				{ "clusterName", "cluster/id", "status" }
+			}
+		);
+		goldenGroup(
+			lines,
+			"object-keys",
+			getResourceAsString("/object-keys.json"),
+			new String[] { "/members/*", "/members", "/members/*/displayname/args" },
+			new String[][] {
+				{ "id", "name" },
+				{ "name", "manufacturing/serialNumber", "type/default" },
+				{ "../arraySerialNumber", "../../arraySerialNumber", "../../../arraySerialNumber" }
+			}
+		);
+		goldenGroup(
+			lines,
+			"wildcard-key",
+			getResourceAsString("/wildcard-key.json"),
+			new String[] { "/items", "/items/*", "/items/\\*" },
+			new String[][] { { "id", "name" } }
+		);
+		goldenGroup(
+			lines,
+			"list",
+			"{\"kind\":\"PodList\",\"items\":[" +
+			"{\"metadata\":{\"name\":\"a\",\"labels\":{\"app\":\"x\"}},\"status\":{\"conditions\":[" +
+			"{\"type\":\"Ready\",\"status\":\"True\"},{\"type\":\"Initialized\",\"status\":\"True\"}]}}," +
+			"{\"metadata\":{\"name\":\"b\"},\"status\":{\"conditions\":[]}}," +
+			"{\"metadata\":{\"name\":\"c\"},\"status\":{\"phase\":null,\"restarts\":1.50e1}}" +
+			"]}",
+			new String[] { "/items", "/items/status/conditions", "items/status", "/ITEMS", "/items/*" },
+			new String[][] {
+				{ "metadata/name", "metadata/labels/app" },
+				{ "type", "../../metadata/name" },
+				{ ".", "phase", "restarts" },
+				{ "metadata/name", "../kind" },
+				{ "METADATA/NAME" }
+			}
+		);
+		goldenGroup(
+			lines,
+			"special-values",
+			"{\"items\":[{\"name\":\"line1\\nline2\",\"v\":\"a;b\",\"w\":\"x,y\",\"t\":\"tab\\there\",\"crlf\":\"a\\r\\nb\"," +
+			"\"sep\":\"||\",\"u\":\"été ჻\"},{\"name\":\"\",\"v\":null,\"w\":true,\"t\":false,\"crlf\":1.50e1," +
+			"\"sep\":-0}]}",
+			new String[] { "/items", "/items/*" },
+			new String[][] { { "name", "v", "w", "t", "crlf", "sep", "u" } }
+		);
+		goldenGroup(
+			lines,
+			"empty-containers",
+			"{\"items\":[],\"o\":{},\"a\":[[],[1,[2,3]],{}]}",
+			new String[] { "/items", "/o", "/a", "/a/*", "/o/*", "/a[1]" },
+			new String[][] {}
+		);
+		goldenGroup(
+			lines,
+			"case",
+			"{\"Items\":[{\"a\":1}],\"items\":[{\"a\":2}],\"ITEMS2\":{\"B\":3}}",
+			new String[] { "/items", "/ITEMS2" },
+			new String[][] { { "a", "b", "A" } }
+		);
+		goldenGroup(
+			lines,
+			"empty-key",
+			"{\"\":{\"x\":1},\"k\":{\"\":{\"y\":2}}}",
+			new String[] { "//", "/k/", "/k//" },
+			new String[][] { { "x", "/y", "y" } }
+		);
+		goldenGroup(
+			lines,
+			"trailing",
+			"{\"items\":[{\"a\":1}]} trailing",
+			new String[] { "/items" },
+			new String[][] { { "a" } }
+		);
+		String[] scalars = { "\"scalar\"", "42", "null", "true", "[]", "{}", "[1,\"two\",null,{\"a\":1},[3]]", "{ wrong" };
+		for (String scalar : scalars) {
+			goldenGroup(lines, scalar, scalar, new String[] { "/a" }, new String[][] { { "a" } });
+		}
+
+		// Invalid arguments, and toCSV() before parse()
+		String[] results = new String[3];
+		for (boolean eventParsing : new boolean[] { false, true }) {
+			JFlat jFlat = new JFlat("{\"a\":1}", eventParsing);
+			String notParsed = goldenCsv(jFlat, "/", null, null);
+			parse(jFlat, false);
+			String nullKey = goldenCsv(jFlat, null, null, null);
+			String nullProperty = goldenCsv(jFlat, "/", new String[] { "a", null }, null);
+			results[0] = bothModes(results[0], notParsed);
+			results[1] = bothModes(results[1], nullKey);
+			results[2] = bothModes(results[2], nullProperty);
+		}
+		lines.add("not parsed -> " + results[0]);
+		lines.add("null key -> " + results[1]);
+		lines.add("null property -> " + results[2]);
+
+		// Random documents, entry keys, properties and separators, with toCSV() called twice
+		Random random = new Random(20261111L);
+		for (int d = 0; d < 300; d++) {
+			String json = randomDocument(random);
+			for (int k = 0; k < 3; k++) {
+				String entryKey = randomEntryKey(random);
+				String[] properties = randomProperties(random);
+				String separator = SEPARATORS[random.nextInt(SEPARATORS.length)];
+				boolean removeNodes = random.nextBoolean();
+				String result = null;
+				for (boolean eventParsing : new boolean[] { false, true }) {
+					JFlat jFlat = new JFlat(json, eventParsing);
+					String[] clone = properties.clone();
+					result =
+						bothModes(
+							result,
+							parse(jFlat, removeNodes) +
+							goldenCsv(jFlat, entryKey, clone, separator) +
+							" then " +
+							goldenCsv(jFlat, entryKey, clone, separator)
+						);
+				}
+				lines.add("random " + d + "." + k + " -> " + result);
+			}
+		}
+		return lines;
+	}
+
+	/**
+	 * @param tree The result in the default mode, null when the call is in the default mode
+	 * @param result The result of the call
+	 * @return The result of the call in the default mode, followed by the result in event parsing mode when it differs
+	 */
+	private static String bothModes(String tree, String result) {
+		if (tree == null) {
+			return result;
+		}
+		return tree.equals(result) ? tree : tree + " | events -> " + result;
+	}
+
+	/**
+	 * Add the golden lines of a document: each entry key and properties (with the generic ones), in both parsing
+	 * modes, with and without the nodes without value
+	 */
+	private static void goldenGroup(
+		List<String> lines,
+		String name,
+		String json,
+		String[] keys,
+		String[][] propertySets
+	) {
+		List<String> allKeys = new ArrayList<>(Arrays.asList(GOLDEN_KEYS));
+		allKeys.addAll(Arrays.asList(keys));
+		List<String[]> allProperties = new ArrayList<>(Arrays.asList(GOLDEN_PROPERTIES));
+		allProperties.addAll(Arrays.asList(propertySets));
+		for (int k = 0; k < allKeys.size(); k++) {
+			String key = allKeys.get(k);
+			for (boolean removeNodes : new boolean[] { false, true }) {
+				JFlat tree = new JFlat(json);
+				String treeParsed = parse(tree, removeNodes);
+				JFlat events = new JFlat(json, true);
+				String eventsParsed = parse(events, removeNodes);
+				for (int p = 0; p < allProperties.size(); p++) {
+					String separator = GOLDEN_SEPARATORS[(k * allProperties.size() + p) % GOLDEN_SEPARATORS.length];
+					String[] properties = allProperties.get(p);
+					lines.add(
+						quote(name) +
+						" removeNodes=" +
+						removeNodes +
+						" key=" +
+						quote(key) +
+						" properties=" +
+						quote(properties) +
+						" separator=" +
+						quote(separator) +
+						" -> " +
+						bothModes(
+							treeParsed + goldenCsv(tree, key, properties == null ? null : properties.clone(), separator),
+							eventsParsed + goldenCsv(events, key, properties == null ? null : properties.clone(), separator)
+						)
+					);
+				}
+			}
+		}
+	}
+
+	/**
+	 * @return "" when the document is parsed, the exception otherwise
+	 */
+	private static String parse(JFlat jFlat, boolean removeNodes) {
+		try {
+			jFlat.parse(removeNodes);
+			return "";
+		} catch (Exception e) {
+			return "parse " + describe(e) + " ";
+		}
+	}
+
+	/**
+	 * @return The class of the exception, with its message when JFlat writes it (the messages of the JDK change
+	 *         with its version)
+	 */
+	private static String describe(Exception e) {
+		boolean jflatMessage =
+			e instanceof ParseException || e instanceof IllegalArgumentException || e instanceof IllegalStateException;
+		return e.getClass().getName() + (jflatMessage ? ": " + quote(e.getMessage()) : "");
+	}
+
+	/**
+	 * @return The toCSV() output (or its SHA-256 and length when it is long) and the properties when toCSV() cleaned
+	 *         them, or the exception
+	 */
+	private static String goldenCsv(JFlat jFlat, String key, String[] properties, String separator) {
+		String[] before = properties == null ? null : properties.clone();
+		try {
+			String csv = jFlat.toCSV(key, properties, separator).toString();
+			String escaped = escape(csv);
+			String result = escaped.length() <= 200
+				? "\"" + escaped + "\""
+				: "sha256:" + sha256(csv) + " length:" + csv.length();
+			return Arrays.equals(before, properties) ? result : result + " properties after=" + quote(properties);
+		} catch (Exception e) {
+			return describe(e);
+		}
+	}
+
+	private static String quote(String[] values) {
+		if (values == null) {
+			return "null";
+		}
+		List<String> quoted = new ArrayList<>();
+		for (String value : values) {
+			quoted.add(quote(value));
+		}
+		return "[" + String.join(",", quoted) + "]";
+	}
+
+	private static String quote(String value) {
+		return value == null ? "null" : "\"" + escape(value) + "\"";
+	}
+
+	/**
+	 * @return The value in ASCII, on one line
+	 */
+	private static String escape(String value) {
+		StringBuilder escaped = new StringBuilder();
+		for (char c : value.toCharArray()) {
+			if (c == '\\') {
+				escaped.append("\\\\");
+			} else if (c == '\n') {
+				escaped.append("\\n");
+			} else if (c == '\r') {
+				escaped.append("\\r");
+			} else if (c == '\t') {
+				escaped.append("\\t");
+			} else if (c < 0x20 || c > 0x7e) {
+				escaped.append(String.format("\\u%04x", (int) c));
+			} else {
+				escaped.append(c);
+			}
+		}
+		return escaped.toString();
+	}
+
+	private static String sha256(String value) {
+		try {
+			StringBuilder hex = new StringBuilder();
+			for (byte b : MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))) {
+				hex.append(String.format("%02x", b));
+			}
+			return hex.toString();
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	/**
