@@ -350,6 +350,30 @@ public class JFlatTest {
 		);
 	}
 
+	/**
+	 * In event parsing mode, the rows are written unit after unit: when a later unit makes the event parsing give up
+	 * (here, a duplicate key in the second element), the rows written so far are dropped and the whole document is
+	 * processed again, so no row is written twice.
+	 */
+	@Test
+	void eventParsingFallbackWritesEachRowOnce() throws IllegalStateException, ParseException, IOException {
+		String json = "{\"items\":[{\"a\":\"1\"},{\"a\":\"2\",\"a\":\"3\"},{\"a\":\"4\"}]}";
+		JFlat tree = new JFlat(json, false);
+		tree.parse();
+		JFlat events = new JFlat(json, true);
+		events.parse();
+
+		assertEquals(
+			"/items[0];1;\n/items[1];3;\n/items[2];4;\n",
+			tree.toCSV("/items", new String[] { "a" }, ";").toString()
+		);
+		assertEquals(
+			tree.toCSV("/items", new String[] { "a" }, ";").toString(),
+			events.toCSV("/items", new String[] { "a" }, ";").toString()
+		);
+		assertEquals(tree.toTable("/items", new String[] { "a" }), events.toTable("/items", new String[] { "a" }));
+	}
+
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void flatMapView(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
