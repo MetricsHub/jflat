@@ -17,8 +17,11 @@ import java.security.NoSuchAlgorithmException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.SortedMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -250,6 +253,157 @@ public class JFlatTest {
 			"/items[0];a;\n/items[1];b;\n/items[2];c;\n",
 			jFlat.toCSV("/ITEMS", new String[] { "METADATA/NAME" }, ";").toString()
 		);
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void table(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		String list =
+			"{\"kind\":\"PodList\",\"items\":[" +
+			"{\"metadata\":{\"name\":\"a\",\"labels\":{\"app\":\"x\"}},\"status\":{\"conditions\":[" +
+			"{\"type\":\"Ready\",\"status\":\"True\"},{\"type\":\"Initialized\",\"status\":\"True\"}]}}," +
+			"{\"metadata\":{\"name\":\"b\"},\"status\":{\"conditions\":[]}}," +
+			"{\"metadata\":{\"name\":\"line1\\nline2;c\"},\"status\":{\"phase\":null,\"restarts\":1.50e1}}" +
+			"]}";
+		JFlat jFlat = new JFlat(list, eventParsing);
+		jFlat.parse();
+
+		// Nested objects, missing property, a value with a line feed and the separator kept whole
+		assertEquals(
+			Arrays.asList(
+				Arrays.asList("/items[0]", "a", "x"),
+				Arrays.asList("/items[1]", "b", ""),
+				Arrays.asList("/items[2]", "line1\nline2;c", "")
+			),
+			jFlat.toTable("/items", new String[] { "metadata/name", "metadata/labels/app" })
+		);
+		// toCSV() writes the same rows, which cannot be cut back into rows and cells
+		assertEquals(
+			"/items[0];a;x;\n/items[1];b;;\n/items[2];line1\nline2;c;;\n",
+			jFlat.toCSV("/items", new String[] { "metadata/name", "metadata/labels/app" }, ";").toString()
+		);
+
+		// Arrays below the elements, ../ properties
+		assertEquals(
+			Arrays.asList(
+				Arrays.asList("/items[0]/status/conditions[0]", "Ready", "a", "PodList"),
+				Arrays.asList("/items[0]/status/conditions[1]", "Initialized", "a", "PodList"),
+				Arrays.asList("/items[1]/status/conditions", "", "b", "PodList")
+			),
+			jFlat.toTable("/items/status/conditions", new String[] { "type", "../../metadata/name", "../../../kind" })
+		);
+
+		// Markers, null and numbers, case-insensitive entry key and properties
+		assertEquals(
+			Arrays.asList(
+				Arrays.asList("/items[0]/status", "{object}", "", ""),
+				Arrays.asList("/items[1]/status", "{object}", "", ""),
+				Arrays.asList("/items[2]/status", "{object}", "NULL", "15.0")
+			),
+			jFlat.toTable("ITEMS/STATUS", new String[] { ".", "PHASE", "restarts" })
+		);
+
+		// No properties, no entry
+		assertEquals(
+			Arrays.asList(Arrays.asList("/items[0]"), Arrays.asList("/items[1]"), Arrays.asList("/items[2]")),
+			jFlat.toTable("/items", null)
+		);
+		assertEquals(Arrays.asList(), jFlat.toTable("/nonexistent", new String[] { "." }));
+
+		// Arguments
+		assertThrows(IllegalArgumentException.class, () -> jFlat.toTable(null, null));
+		assertThrows(IllegalArgumentException.class, () -> jFlat.toTable("/items", new String[] { "a", null }));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void tableWildcard(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		// Children of an object
+		JFlat wildcard = new JFlat(getResourceAsString("/wildcard-key.json"), eventParsing);
+		wildcard.parse();
+		assertEquals(
+			Arrays.asList(
+				Arrays.asList("/items/*", "1", "star"),
+				Arrays.asList("/items/alpha", "2", "alpha"),
+				Arrays.asList("/items/beta", "3", "beta")
+			),
+			wildcard.toTable("/items/*", new String[] { "id", "name" })
+		);
+
+		// Elements of arrays: root array, then arrayB
+		JFlat simple = new JFlat(getResourceAsString("/simple.json"), eventParsing);
+		simple.parse();
+		assertEquals(
+			Arrays.asList(
+				Arrays.asList("[0]/arrayB[0]", "1", "1"),
+				Arrays.asList("[0]/arrayB[1]", "2", "1"),
+				Arrays.asList("[0]/arrayB[2]", "3", "1"),
+				Arrays.asList("[1]/arrayB[0]", "1", "2"),
+				Arrays.asList("[1]/arrayB[1]", "2", "2"),
+				Arrays.asList("[1]/arrayB[2]", "3", "2")
+			),
+			simple.toTable("/*/arrayB/*", new String[] { "id", "../attribute1" })
+		);
+		assertEquals(
+			Arrays.asList(Arrays.asList("[0]/arrayA[0]", "value1"), Arrays.asList("[0]/arrayA[1]", "value2")),
+			simple.toTable("/arrayA", new String[] { "." }).subList(0, 2)
+		);
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void flatMapView(boolean eventParsing) throws IllegalStateException, ParseException, IOException {
+		// Before parse()
+		JFlat notParsed = new JFlat("{}", eventParsing);
+		assertThrows(IllegalStateException.class, () -> notParsed.getFlatMap());
+		assertThrows(IllegalStateException.class, () -> notParsed.toTable("/", null));
+
+		// The same entries as the flat tree
+		JFlat simple = new JFlat(getResourceAsString("/simple.json"), eventParsing);
+		simple.parse();
+		simple.toCSV("/arrayB", new String[] { "id" }, ";");
+		SortedMap<String, String> map = simple.getFlatMap();
+		StringBuilder tree = new StringBuilder();
+		for (Map.Entry<String, String> entry : map.entrySet()) {
+			tree.append(entry.getKey()).append('=').append(entry.getValue()).append('\n');
+		}
+		assertEquals(getResourceAsString("/simple-flatMap.txt"), tree.toString());
+		assertEquals("{array}", map.get("/"));
+		assertEquals("[0]", map.headMap("[0]/").lastKey());
+
+		// Case-insensitive keys
+		assertEquals(String.CASE_INSENSITIVE_ORDER, map.comparator());
+		assertEquals("2", map.get("[0]/ARRAYB[1]/ID"));
+
+		// Unmodifiable
+		assertThrows(UnsupportedOperationException.class, () -> map.put("/x", "y"));
+		assertThrows(UnsupportedOperationException.class, () -> map.remove("/"));
+		assertThrows(UnsupportedOperationException.class, () -> map.entrySet().iterator().next().setValue("x"));
+
+		// Values of the literals and containers, keys that differ only by case
+		String literals =
+			"{\"t\":true,\"f\":false,\"n\":null,\"num\":1.50e1,\"s\":\"a\\nb\",\"o\":{},\"a\":[[1]],\"Name\":\"x\",\"name\":\"y\"}";
+		JFlat jFlat = new JFlat(literals, eventParsing);
+		jFlat.parse();
+		Map<String, String> expected = new LinkedHashMap<>();
+		expected.put("/", "{object}");
+		expected.put("/a", "{array}");
+		expected.put("/a[0]", "{array}");
+		expected.put("/a[0][0]", "1");
+		expected.put("/f", "FALSE");
+		expected.put("/n", "NULL");
+		expected.put("/Name", "y");
+		expected.put("/num", "15.0");
+		expected.put("/o", "{object}");
+		expected.put("/s", "a\nb");
+		expected.put("/t", "TRUE");
+		assertEquals(new ArrayList<>(expected.entrySet()), new ArrayList<>(jFlat.getFlatMap().entrySet()));
+
+		// Without the nodes without value
+		JFlat removeNodes = new JFlat(literals, eventParsing);
+		removeNodes.parse(true);
+		expected.keySet().removeAll(Arrays.asList("/", "/a", "/a[0]", "/o"));
+		assertEquals(new ArrayList<>(expected.entrySet()), new ArrayList<>(removeNodes.getFlatMap().entrySet()));
 	}
 
 	/**
