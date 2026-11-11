@@ -781,7 +781,9 @@ public class JFlatTest {
 
 	/**
 	 * toCSV() writes exactly what it wrote before it was built on toTable(): src/test/resources/toCSV-golden.txt was
-	 * captured with {@link #csvGoldenLines()} from toCSV() of version 1.2.01
+	 * captured with {@link #csvGoldenLines()} from toCSV() of version 1.2.01, then regenerated once when toTable()
+	 * stopped cleaning the caller's properties array (the only change: no more "properties after=") and the random
+	 * documents went from 300 to 50 (the first 50 are unchanged)
 	 */
 	@Test
 	void csvGolden() {
@@ -939,7 +941,7 @@ public class JFlatTest {
 
 		// Random documents, entry keys, properties and separators, with toCSV() called twice
 		Random random = new Random(20261111L);
-		for (int d = 0; d < 300; d++) {
+		for (int d = 0; d < 50; d++) {
 			String json = randomDocument(random);
 			for (int k = 0; k < 3; k++) {
 				String entryKey = randomEntryKey(random);

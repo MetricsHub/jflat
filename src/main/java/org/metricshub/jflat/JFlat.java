@@ -519,7 +519,7 @@ public class JFlat {
 	 * the value of the path of the property relative to the entry, whole (line feeds and any other character
 	 * included), or an empty string when there is no such node. <code>.</code> is the entry itself,
 	 * <code>../</code> goes to the parent of the entry (<code>../../metadata/name</code>), and the leading
-	 * <code>./</code> and <code>/</code> of a property are ignored (they are removed from the specified array itself).
+	 * <code>./</code> and <code>/</code> of a property are ignored (the specified array is left unchanged).
 	 * The values are those of {@link #getFlatMap()}. A property that goes above the root (<code>../../kind</code>
 	 * from <code>/items</code>, <code>../kind</code> from <code>/</code>) throws a {@link StringIndexOutOfBoundsException},
 	 * as {@link #toCSV(String, String[], String)} always did.
@@ -544,7 +544,8 @@ public class JFlat {
 	public List<List<String>> toTable(String entryKey, String[] properties)
 		throws IllegalStateException, IllegalArgumentException {
 		String csvEntryKey = entryKey;
-		String[] csvProperties = properties;
+		// A copy: cleaning the properties must not change the caller's array
+		String[] csvProperties = properties == null ? null : properties.clone();
 
 		// Did we parse the thing yet?
 		if (!parsed) {
