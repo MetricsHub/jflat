@@ -135,6 +135,31 @@ System.out.print(jFlat.toCSV("/members/*", new String[] { "id", "name", "type/de
 // /members/def456;1;Drive 1;NVMe;
 ```
 
+## Rows and Flat Map as Java Objects
+
+`toCSV()` writes the values as they are: a value that contains the separator or a line feed cannot be told from the cells and rows around it. `toTable()` returns the same rows as lists, with each value whole:
+
+```Java
+List<List<String>> rows = jFlat.toTable("/members/*", new String[] { "id", "name", "type/default" });
+// rows.get(0): [/members/abc123, 0, Drive 0, NVMe]
+// rows.get(1): [/members/def456, 1, Drive 1, NVMe]
+```
+
+The first cell of each row is the path of the entry, then one cell per property (an empty string when the property is missing). `toCSV()` is built on `toTable()`: each cell followed by the separator, each row followed by `\n`.
+
+`getFlatMap()` returns an unmodifiable view of the flat map, path to value, as `getFlatTree()` writes it:
+
+```Java
+SortedMap<String, String> map = jFlat.getFlatMap();
+map.get("/members/abc123/name");         // "Drive 0"
+map.get("/MEMBERS/ABC123/TYPE/DEFAULT"); // "NVMe": the keys are case-insensitive
+map.get("/members");                     // "{object}"
+```
+
+* The root is `/`, a member of an object is `/parent/key`, an element of an array is `/parent[0]` (`[0]` for an element of a root array).
+* The values are the strings themselves, the numbers as `JsonNumber.toString()` writes them, `TRUE`, `FALSE` and `NULL`, and `{object}` and `{array}` for the containers (left out by `parse(true)`).
+* The keys are compared case-insensitively and sorted in that order (`/items[10]` comes before `/items[2]`).
+
 ## Escaping the Wildcard
 
 If you have a JSON property literally named `*`, escape it with a backslash:
@@ -165,4 +190,4 @@ The documents that this mode cannot process exactly are processed as in the defa
 * a property refers to a node above the array element (`../kind` from `/items`)
 * an object of an element has a duplicate key
 
-`getFlatTree()` builds the map of the whole document, as in the default mode.
+`toTable()` reads the document the same way. `getFlatTree()` and `getFlatMap()` build the map of the whole document, as in the default mode.

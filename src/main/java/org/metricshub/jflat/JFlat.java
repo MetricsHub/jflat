@@ -25,6 +25,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import javax.json.Json;
 import javax.json.JsonArray;
@@ -50,11 +52,11 @@ import javax.json.stream.JsonParsingException;
 /**
  * Provides tools to convert a JSON-formated content to a flat structure, exported as a String.
  * <p>
- * In event parsing mode (see {@link #JFlat(String, boolean)}), {@link #toCSV(String, String[], String)} reads the
- * document again and flattens the value of the first element of the entry key one array element at a time,
- * instead of keeping a map of the whole document: the memory used is bounded by the size of one element. The
- * result is the same as in the default mode; the documents that the event parsing cannot process exactly (see
- * {@link #toCSV(String, String[], String)}) are processed as in the default mode.
+ * In event parsing mode (see {@link #JFlat(String, boolean)}), {@link #toTable(String, String[])} and
+ * {@link #toCSV(String, String[], String)} read the document again and flatten the value of the first element of
+ * the entry key one array element at a time, instead of keeping a map of the whole document: the memory used is
+ * bounded by the size of one element. The result is the same as in the default mode; the documents that the event
+ * parsing cannot process exactly (see {@link #toTable(String, String[])}) are processed as in the default mode.
  * @author Bertrand Martin
  *
  */
@@ -67,7 +69,7 @@ public class JFlat {
 	private boolean parsed = false;
 
 	// Event parsing mode: the source is kept to be read again, and the map of the whole document is only built when
-	// needed (getFlatTree(), or a document that the event parsing cannot process exactly)
+	// needed (getFlatTree(), getFlatMap(), or a document that the event parsing cannot process exactly)
 	private boolean eventParsing;
 	private String source;
 	private boolean removeNodes;
@@ -87,7 +89,7 @@ public class JFlat {
 	 *
 	 * @param pJsonReader A Reader object (can be StringReader, FileReader, etc.), read entirely by parse() in
 	 *                    event parsing mode
-	 * @param pEventParsing Whether toCSV() reads the document by events, one element at a time, instead of keeping a
+	 * @param pEventParsing Whether toTable() and toCSV() read the document by events, one element at a time, instead of keeping a
 	 *                      map of all its nodes
 	 */
 	public JFlat(Reader pJsonReader, boolean pEventParsing) {
@@ -104,7 +106,7 @@ public class JFlat {
 
 	/**
 	 * @param pJsonSource JSON source to be parsed
-	 * @param pEventParsing Whether toCSV() reads the document by events, one element at a time, instead of keeping a
+	 * @param pEventParsing Whether toTable() and toCSV() read the document by events, one element at a time, instead of keeping a
 	 *                      map of all its nodes
 	 */
 	public JFlat(String pJsonSource, boolean pEventParsing) {
@@ -415,7 +417,137 @@ public class JFlat {
 	}
 
 	/**
+	 * Return the flat map of the parsed document: the path of each node, mapped to its value
+	 * <p>
+	 * The paths are built as follows:
+	 * <ul>
+	 * <li>the root value is <code>/</code></li>
+	 * <li>a member of an object is the path of the object, <code>/</code> and the key: <code>/kind</code>,
+	 * <code>/metadata/name</code> (the keys are not escaped: a key that contains <code>/</code> or <code>[</code>
+	 * gives a path that looks like a deeper one, and an empty key gives the path of the object followed by
+	 * <code>/</code>: <code>/k/</code> in <code>/k</code>, and <code>/</code> at the root, the path of the root
+	 * itself, so that its children are <code>//x</code>)</li>
+	 * <li>an element of an array is the path of the array and its index: <code>/items[0]</code>,
+	 * <code>/items[0]/name</code>, <code>/matrix[1][0]</code>; the elements of a root array have no leading
+	 * <code>/</code>: <code>[0]</code>, <code>[0]/id</code></li>
+	 * </ul>
+	 * The values are:
+	 * <ul>
+	 * <li><code>{object}</code> and <code>{array}</code> for an object and an array, unless the document was parsed
+	 * with <code>parse(true)</code> (removeNodes), which leaves them out of the map</li>
+	 * <li>the string itself for a string, unescaped and whole (line feeds included)</li>
+	 * <li>the number as {@link JsonNumber#toString()} writes it (<code>1.50e1</code> gives <code>15.0</code>,
+	 * <code>-0</code> gives <code>0</code>)</li>
+	 * <li><code>TRUE</code>, <code>FALSE</code> and <code>NULL</code> for <code>true</code>, <code>false</code> and
+	 * <code>null</code></li>
+	 * </ul>
+	 * The keys are compared case-insensitively ({@link String#CASE_INSENSITIVE_ORDER}): <code>get("/ITEMS[0]/NAME")</code>
+	 * finds <code>/items[0]/name</code>, and two paths that differ only by case are one entry, with the spelling of the
+	 * first one and the value of the last one. The keys are sorted in this order, which is not the order of the
+	 * document: <code>/items[10]</code> comes before <code>/items[2]</code>, and <code>/a/b</code> before
+	 * <code>/a[0]</code>.
+	 * <p>
+	 * In event parsing mode (see {@link #JFlat(String, boolean)}), <code>parse()</code> builds no map unless the
+	 * event parsing cannot read the document: the first call builds the map of the whole document, as
+	 * {@link #getFlatTree()} does, with the same content and memory usage as in the default mode.
+	 *
+	 * @return An unmodifiable view of the flat map
+	 * @throws IllegalStateException when the document has not been parsed first (call parse() first!)
+	 */
+	public SortedMap<String, String> getFlatMap() throws IllegalStateException {
+		// Did we parse the thing yet?
+		if (!parsed) {
+			throw new IllegalStateException("JSON document has not been parsed");
+		}
+
+		// The flat map is the map of the whole document
+		if (eventParsing && !fullMap) {
+			buildFullMap();
+		}
+
+		return Collections.unmodifiableSortedMap(map);
+	}
+
+	/**
 	 * Translates (flattens) a JSON structure into a CSV string
+	 * <p>
+	 * The rows are those of {@link #toTable(String, String[])}: each cell is followed by the separator, and each row
+	 * by <code>\n</code>. The values are written as they are: a value that contains the separator or a line feed
+	 * cannot be told from the cells and rows around it; use {@link #toTable(String, String[])} to get them whole.
+	 *
+	 * @param csvEntryKey The key in the JSON data that will be shown as a new entry in the resulting CSV (i.e. a new line)
+	 * @param csvProperties Array of strings specifying the properties of the entry key to be added to the CSV as new fields
+	 * @param separator The separator between fields in the resulting CSV (";" will be used if null)
+	 * @return The CSV string
+	 * @throws IllegalArgumentException when any of the specified arguments is null (or an entry in the csvProperties array is null)
+	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
+	 * @throws StringIndexOutOfBoundsException when a property goes above the root
+	 */
+	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator)
+		throws IllegalStateException, IllegalArgumentException {
+		// Default separator is ";"
+		final String cellSeparator = separator == null ? ";" : separator;
+
+		// Each row is written as soon as it is built: in event parsing mode, only one unit is held at a time
+		final StringBuilder csvResult = new StringBuilder();
+		writeRows(
+			csvEntryKey,
+			csvProperties,
+			new RowSink() {
+				@Override
+				public void accept(List<String> row) {
+					for (String cell : row) {
+						csvResult.append(cell).append(cellSeparator);
+					}
+					// End of line, new record!
+					csvResult.append("\n");
+				}
+
+				@Override
+				public void clear() {
+					csvResult.setLength(0);
+				}
+			}
+		);
+		return csvResult;
+	}
+
+	/**
+	 * Receives the rows of {@link #writeRows(String, String[], RowSink)} as they are built
+	 */
+	private interface RowSink {
+		/**
+		 * @param row A new row
+		 */
+		void accept(List<String> row);
+
+		/**
+		 * Drops the rows received so far: the event parsing gave up and the document is processed again in the default
+		 * mode
+		 */
+		void clear();
+	}
+
+	/**
+	 * Translates (flattens) a JSON structure into a table: one row per entry, the rows that
+	 * {@link #toCSV(String, String[], String)} writes
+	 * <p>
+	 * The entries are the nodes of the entry key: <code>/items/status</code> gives one entry per element of
+	 * <code>items</code> (and per element of <code>status</code> when it is an array), as
+	 * <code>/items[0]/status</code>, <code>/items[1]/status</code>, etc. A <code>*</code> element of the entry key
+	 * expands each child of an object, or each element of an array (<code>\*</code> refers to a key that is
+	 * literally <code>*</code>). The entry key is case-insensitive, and the entries that are not in the flat map
+	 * (see {@link #getFlatMap()}) are skipped: with <code>parse(true)</code>, an entry that is an object or an array
+	 * has no node, hence no row.
+	 * <p>
+	 * The first cell of a row is the path of the entry, as written in the document. Then each property gives one cell:
+	 * the value of the path of the property relative to the entry, whole (line feeds and any other character
+	 * included), or an empty string when there is no such node. <code>.</code> is the entry itself,
+	 * <code>../</code> goes to the parent of the entry (<code>../../metadata/name</code>), and the leading
+	 * <code>./</code> and <code>/</code> of a property are ignored (the specified array is left unchanged).
+	 * The values are those of {@link #getFlatMap()}. A property that goes above the root (<code>../../kind</code>
+	 * from <code>/items</code>, <code>../kind</code> from <code>/</code>) throws a {@link StringIndexOutOfBoundsException},
+	 * as {@link #toCSV(String, String[], String)} always did.
 	 * <p>
 	 * In event parsing mode, the document is read again and the value of the first element of the entry key
 	 * (<code>items</code> in <code>/items/status/conditions</code>) is flattened one array element at a time (or
@@ -427,15 +559,50 @@ public class JFlat {
 	 * contains <code>/</code> or <code>[</code>, property that refers to a node above the unit
 	 * (<code>../kind</code> from <code>/items</code>), or a duplicate key in an object of a unit.
 	 *
-	 * @param csvEntryKey The key in the JSON data that will be shown as a new entry in the resulting CSV (i.e. a new line)
-	 * @param csvProperties Array of strings specifying the properties of the entry key to be added to the CSV as new fields
-	 * @param separator The separator between fields in the resulting CSV (";" will be used if null)
-	 * @return The CSV string
-	 * @throws IllegalArgumentException when any of the specified arguments is null (or an entry in the csvProperties array is null)
+	 * @param entryKey The path of the entries, one row each
+	 * @param properties The paths of the cells of each row, relative to the entry (null for none)
+	 * @return A new list of the rows, each a new list of the path of the entry and the value of each property
+	 * @throws IllegalArgumentException when the entry key or a property is null
 	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
+	 * @throws StringIndexOutOfBoundsException when a property goes above the root
 	 */
-	public StringBuilder toCSV(String csvEntryKey, String[] csvProperties, String separator)
+	public List<List<String>> toTable(String entryKey, String[] properties)
 		throws IllegalStateException, IllegalArgumentException {
+		final List<List<String>> rows = new ArrayList<>();
+		writeRows(
+			entryKey,
+			properties,
+			new RowSink() {
+				@Override
+				public void accept(List<String> row) {
+					rows.add(row);
+				}
+
+				@Override
+				public void clear() {
+					rows.clear();
+				}
+			}
+		);
+		return rows;
+	}
+
+	/**
+	 * Builds the rows of {@link #toTable(String, String[])} and hands each one to the sink as soon as it is built
+	 *
+	 * @param entryKey The path of the entries, one row each
+	 * @param properties The paths of the cells of each row, relative to the entry (null for none)
+	 * @param sink Receives the rows
+	 * @throws IllegalArgumentException when the entry key or a property is null
+	 * @throws IllegalStateException when the JSON document has not been parsed yet (call parse() first!)
+	 * @throws StringIndexOutOfBoundsException when a property goes above the root
+	 */
+	private void writeRows(String entryKey, String[] properties, RowSink sink)
+		throws IllegalStateException, IllegalArgumentException {
+		String csvEntryKey = entryKey;
+		// A copy: cleaning the properties must not change the caller's array
+		String[] csvProperties = properties == null ? null : properties.clone();
+
 		// Did we parse the thing yet?
 		if (!parsed) {
 			throw new IllegalStateException("JSON document has not been parsed");
@@ -466,26 +633,21 @@ public class JFlat {
 			}
 		}
 
-		// Default separator is ";"
-		if (separator == null) {
-			separator = ";";
-		}
-
 		// Event parsing mode: process the document one unit at a time, unless the event parsing cannot give the exact result
 		if (eventParsing && !fullMap) {
 			try {
-				return eventParsingToCSV(csvEntryKey, csvProperties, separator);
+				eventParsingRows(csvEntryKey, csvProperties, sink);
+				return;
 			} catch (DefaultModeRequiredException e) {
+				// The rows of the units read so far are built again from the whole document
+				sink.clear();
 				buildFullMap();
 			}
 		}
 
-		// Initialize the StringBuilder to hold the result
-		StringBuilder csvResult = new StringBuilder();
-
 		// Empty TreeMap?
 		if (map == null || map.size() == 0) {
-			return csvResult;
+			return;
 		}
 
 		// Add a "/" at the beginning of the entry key, if necessary
@@ -535,16 +697,13 @@ public class JFlat {
 		// Now, process each element, as described above
 		entries = expandEntries(entries, pathElementArray, 0);
 
-		// And now, build the CSV
+		// And now, build the rows
 		try {
-			appendRows(entries, csvProperties, separator, null, csvResult);
+			appendRows(entries, csvProperties, null, sink);
 		} catch (DefaultModeRequiredException e) {
 			// Only raised for a unit of a document read by events
 			throw new IllegalStateException(e);
 		}
-
-		// Return
-		return csvResult;
 	}
 
 	/**
@@ -711,23 +870,17 @@ public class JFlat {
 	}
 
 	/**
-	 * Append the CSV rows of the entries
+	 * Append the rows of the entries
 	 *
 	 * @param entries The entries
 	 * @param csvProperties The properties of each entry
-	 * @param separator The separator between fields
 	 * @param unitPath The path of the unit read by events that holds the entries, null for the map of the whole document
-	 * @param csvResult Where the rows are appended
+	 * @param sink Receives the rows
 	 * @throws DefaultModeRequiredException when a property refers to a node above the unit
 	 */
-	private void appendRows(
-		List<String> entries,
-		String[] csvProperties,
-		String separator,
-		String unitPath,
-		StringBuilder csvResult
-	) throws DefaultModeRequiredException {
-		// And now, build the CSV
+	private void appendRows(List<String> entries, String[] csvProperties, String unitPath, RowSink sink)
+		throws DefaultModeRequiredException {
+		// And now, build the rows
 		for (String entry : entries) {
 			// Check that the entry actually exists (in case, the user has put an invalid entryKey)
 			if (!map.containsKey(entry)) {
@@ -735,7 +888,8 @@ public class JFlat {
 			}
 
 			// First, add the "ID" of the entry
-			csvResult.append(map.floorKey(entry)).append(separator);
+			List<String> row = new ArrayList<>(csvProperties.length + 1);
+			row.add(map.floorKey(entry));
 
 			// If it's the root ("/"), replace it with "", so that future concatenation with the property name will work properly
 			if (entry.equals("/")) {
@@ -771,12 +925,12 @@ public class JFlat {
 					value = "";
 				}
 
-				// Append to the result
-				csvResult.append(value).append(separator);
+				// Append to the row
+				row.add(value);
 			}
 
-			// End of line, new record!
-			csvResult.append("\n");
+			// New record!
+			sink.accept(row);
 		}
 	}
 
@@ -793,15 +947,14 @@ public class JFlat {
 	}
 
 	/**
-	 * Translates the source into a CSV string in event parsing mode
+	 * Translates the source into rows in event parsing mode
 	 *
 	 * @param csvEntryKey The entry key (as specified)
 	 * @param csvProperties The cleaned properties
-	 * @param separator The separator between fields
-	 * @return The CSV string
+	 * @param sink Receives the rows, unit after unit
 	 * @throws DefaultModeRequiredException when the event parsing cannot give the exact result
 	 */
-	private StringBuilder eventParsingToCSV(String csvEntryKey, String[] csvProperties, String separator)
+	private void eventParsingRows(String csvEntryKey, String[] csvProperties, RowSink sink)
 		throws DefaultModeRequiredException {
 		// Same entry key as the default mode
 		String entryKey = csvEntryKey.isEmpty() ? "/" : csvEntryKey;
@@ -829,7 +982,6 @@ public class JFlat {
 		// What the units must keep, null to keep everything
 		PathNode needed = neededPaths(pathElementArray, first + 1, csvProperties);
 
-		StringBuilder csvResult = new StringBuilder();
 		JsonParser parser = Json.createParser(new StringReader(source));
 		try {
 			if (parser.next() != Event.START_OBJECT) {
@@ -867,7 +1019,7 @@ public class JFlat {
 						}
 						unit.arrayPaths.add(documentPath);
 						unit.arrayLengths.add(0);
-						unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, separator, csvResult);
+						unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, sink);
 						continue;
 					}
 
@@ -881,7 +1033,7 @@ public class JFlat {
 						unit.arrayPaths.add(documentPath);
 						unit.arrayLengths.add(0);
 						String unitEntry = entryPath + "[" + index + "]";
-						unit.appendUnitRows(unitEntry, unitEntry, pathElementArray, first, csvProperties, separator, csvResult);
+						unit.appendUnitRows(unitEntry, unitEntry, pathElementArray, first, csvProperties, sink);
 						index++;
 						event = parser.next();
 					}
@@ -890,14 +1042,12 @@ public class JFlat {
 					JFlat unit = new JFlat();
 					unit.removeNodes = removeNodes;
 					unit.flatten(parser, event, documentPath, needed);
-					unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, separator, csvResult);
+					unit.appendUnitRows(entryPath, entryPath, pathElementArray, first, csvProperties, sink);
 				}
 			}
 		} finally {
 			parser.close();
 		}
-
-		return csvResult;
 	}
 
 	/**
@@ -908,8 +1058,7 @@ public class JFlat {
 	 * @param pathElementArray The elements of the entry key path
 	 * @param first The index of the element that selected the unit
 	 * @param csvProperties The cleaned properties
-	 * @param separator The separator between fields
-	 * @param csvResult Where the rows are appended
+	 * @param sink Receives the rows
 	 * @throws DefaultModeRequiredException when a property refers to a node above the unit
 	 */
 	private void appendUnitRows(
@@ -918,13 +1067,12 @@ public class JFlat {
 		String[] pathElementArray,
 		int first,
 		String[] csvProperties,
-		String separator,
-		StringBuilder csvResult
+		RowSink sink
 	) throws DefaultModeRequiredException {
 		ArrayList<String> entries = new ArrayList<>();
 		entries.add(unitEntry);
 		entries = expandEntries(entries, pathElementArray, first + 1);
-		appendRows(entries, csvProperties, separator, unitPath, csvResult);
+		appendRows(entries, csvProperties, unitPath, sink);
 	}
 
 	/**
